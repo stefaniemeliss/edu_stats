@@ -96,7 +96,7 @@ merge_timelines_across_columns <- function(data_in = df_in,
       # make new variable numeric
       tmp = as.numeric(tmp)) %>%
     # change col names
-    rename_with(~c(stem, stem_tag), c(tmp, tag)) %>%
+    rename_with(~c(stem, paste0(stem, "_tag")), c(tmp, tag)) %>%
     # merge with data_out
     full_join(x = data_out, y = ., by = identifier_columns) %>%
     as.data.frame()
