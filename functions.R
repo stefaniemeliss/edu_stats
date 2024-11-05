@@ -74,45 +74,35 @@ rbind.all.columns <- function(x, y) {
 }
 
 
-
 merge_timelines_across_columns <- function(data_in = df_in,
                                            column_vector = "cols_to_merge",
                                            stem = "new_var", 
                                            identifier_columns = "id_cols",
                                            data_out = df_out) {
   
-  # select columns
-  tmp <- data_in[, c(identifier_columns, column_vector)]
-  #tmp <- data_in[, c(get(identifier_columns), get(column_vector))]
-  
-  # replace any NAs with ""
-  tmp[, column_vector] <- apply(tmp[, column_vector], 2, function(x) {ifelse(is.na(x), "", x)})
-  
-  # merge information across cols using paste
-  tmp[, "tmp"] <- apply(tmp[, column_vector, drop = F], MARGIN = 1, FUN = function(i) paste(i, collapse = ""))
+  data_out <- data_in %>% 
+    # select columns
+    select(all_of(c(identifier_columns, column_vector))) %>%
+    # replace any NAs with ""
+    mutate(across(all_of(column_vector), ~ifelse(is.na(.), "", .))) %>%
+    # merge information across cols using paste
+    tidyr::unite("tmp", all_of(column_vector), na.rm = TRUE, remove = FALSE, sep = "") %>%
+    # create column that contains tag with information about the column data retained
+    mutate(across(all_of(column_vector), ~ifelse(. != "", deparse(substitute(.)), ""))) %>%
+    tidyr::unite("tag", all_of(column_vector), na.rm = TRUE, remove = TRUE, sep = "") %>%
+    mutate(
+      # replace "" with NA
+      across(c(tmp, tag), ~na_if(., "")),
+      # make new variable numeric
+      tmp = as.numeric(tmp)) %>%
+    # change col names
+    rename_with(~c(stem, stem_tag), c(tmp, tag)) %>%
+    # merge with data_out
+    full_join(x = data_out, y = ., by = identifier_columns) %>%
+    as.data.frame()
 
-  # create column that contains tag with information about the column data retained
-  tmp[, column_vector] <- apply(tmp[, column_vector], 2, function(x) {ifelse(x != "", "true", "")}) # replace values with "true"
-  w <- which(tmp=="true",arr.ind=TRUE) # get indices of "true"
-  tmp[w] <- names(tmp)[w[,"col"]] # replace "true" with column name
-  tmp[, "tag"] = apply(tmp[, column_vector, drop = F], MARGIN = 1, FUN = function(i) paste(i, collapse = "")) # merge across
-  
-  # drop columns that are now merged
-  tmp[, column_vector] <- NULL
-  
-  # replace "" with NA
-  tmp[, c(-1, -2)] <- apply(tmp[, c(-1, -2)], 2, function(x) {ifelse(x == "", NA, x)})
-  
-  # make new variable numeric
-  tmp[, "tmp"] <- as.numeric(tmp[, "tmp"])
-  
-  # change names
-  names(tmp) <- c(identifier_columns, stem, paste0(stem, "_tag"))
-  
-  # merge with data_out
-  data_out <- merge(data_out, tmp, by = identifier_columns, all = T)
-  
   return(data_out)
+  
 }
 
 
@@ -161,7 +151,7 @@ merge_staggered_timelines_across_columns <- function(data_in = df_in,
 
 # Function to identify year of release
 get_year <- function(input_url){
-
+  
   # Split the URLs into parts
   parts <- unlist(strsplit(input_url, "[[:punct:]]"))
   
@@ -242,9 +232,9 @@ download_data_from_url <- function(url){
   if (grepl("'", input, perl = T)) {
     tmp <- sub(".*'", "", input) # remove everything before '
     tmp <- sub("%2F", "_", tmp)
-   } else { # if (grepl('[^\"]', input, perl = T)) { # [^\"] = \
-     tmp <- sub('[^\"]+\"([^\"]+).*', '\\1', input)
-   }
+  } else { # if (grepl('[^\"]', input, perl = T)) { # [^\"] = \
+    tmp <- sub('[^\"]+\"([^\"]+).*', '\\1', input)
+  }
   tmp <- ifelse(nchar(tmp) > 100, gsub("_20", "", tmp), tmp) # replace if filename is too long
   
   # check if higher level variable dir_year exists in environment
