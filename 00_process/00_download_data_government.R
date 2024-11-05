@@ -1,37 +1,52 @@
 ##### WEB SCRAPING SCRIPT #####
 
-options(scipen = 999)
-# empty work space
-rm(list = ls())
-
-# define directory
-dir <- getwd()
-
-# create sub folders
-dir_data <- file.path(dir, "data")
-if (!dir.exists(dir_data)) {
-  dir.create(dir_data)
+setup_environment <- function() {
+  # Prevent scientific notation
+  options(scipen = 999)
+  
+  # Empty the workspace
+  rm(list = ls())
+  
+  # Define the directory
+  dir <- getwd()
+  
+  # Create subfolders if they do not exist
+  dir_data <- file.path(dir, "data")
+  if (!dir.exists(dir_data)) {
+    dir.create(dir_data)
+  }
+  
+  dir_misc <- file.path(dir, "misc")
+  if (!dir.exists(dir_misc)) {
+    dir.create(dir_misc)
+  }
+  
+  # Load necessary libraries
+  library(rvest)
+  library(xml2)
+  library(httr)
+  
+  # Source external functions
+  devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
+  
+  # Determine header information
+  headers <- c(
+    `user-agent` = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36'
+  )
+  # Return a list containing headers and directories
+  return(list(headers = headers, dir_data = dir_data, dir_misc = dir_misc))
 }
-
-dir_misc <- file.path(dir, "misc")
-if (!dir.exists(dir_misc)) {
-  dir.create(dir_misc)
-}
-
-# load libraries
-library(rvest)
-library(xml2)
-library(httr)
-
-devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
-
-# determine header information
-headers = c(
-  `user-agent` = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36'
-)
 
 
 ##### performance tables #####
+
+# Call the function to run all setups and store returned values
+setup_info <- setup_environment()
+
+# Access headers, dir_data, and dir_misc from the returned list
+headers <- setup_info$headers
+dir_data <- setup_info$dir_data
+dir_misc <- setup_info$dir_misc
 
 # determine output directory
 dir_out <- file.path(dir_data, "performance-tables")
@@ -102,30 +117,67 @@ for (year in start:finish) {
       file.rename(tmp_files, tmp_files_new)
     }
   }
-  
+  # remove variable from environment
+  rm(dir_year)
 }
 
 
 ##### Schools, pupils and their characteristics ##### 
 
+# run all setups (reset environment)
+setup_info <- setup_environment()
+
+# Access headers, dir_data, and dir_misc from the returned list
+headers <- setup_info$headers
+dir_data <- setup_info$dir_data
+dir_misc <- setup_info$dir_misc
+
+# download data
 webscrape_government_data(dir_out =  file.path(dir_data, "school-pupils-and-their-characteristics"),
                           parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/school-pupils-and-their-characteristics",
                           pattern_to_match = glob2rx("*school-pupils-and-their-characteristics/20*|*schools-pupils*20*"))
 
 ##### School workforce in England ##### 
 
+# run all setups (reset environment)
+setup_info <- setup_environment()
+
+# Access headers, dir_data, and dir_misc from the returned list
+headers <- setup_info$headers
+dir_data <- setup_info$dir_data
+dir_misc <- setup_info$dir_misc
+
+# download data
 webscrape_government_data(dir_out =  file.path(dir_data, "school-workforce-in-england"),
                           parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/school-workforce-in-england",
                           pattern_to_match = glob2rx("*school-workforce*england/20*|*school-workforce*november-20*"))
 
 ##### School capacity ##### 
 
+# run all setups (reset environment)
+setup_info <- setup_environment()
+
+# Access headers, dir_data, and dir_misc from the returned list
+headers <- setup_info$headers
+dir_data <- setup_info$dir_data
+dir_misc <- setup_info$dir_misc
+
+# download data
 webscrape_government_data(dir_out =  file.path(dir_data, "school-capacity"),
                           parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/school-capacity",
                           pattern_to_match = glob2rx("*school-capacity/20*|*school-capacity*20**"))
 
 ##### Special educational needs in England ##### 
 
+# run all setups (reset environment)
+setup_info <- setup_environment()
+
+# Access headers, dir_data, and dir_misc from the returned list
+headers <- setup_info$headers
+dir_data <- setup_info$dir_data
+dir_misc <- setup_info$dir_misc
+
+# download data
 webscrape_government_data(dir_out =  file.path(dir_data, "special-educational-needs-in-england"),
                           parent_url = "https://explore-education-statistics.service.gov.uk/find-statistics/special-educational-needs-in-england",
                           pattern_to_match = glob2rx("*special-educational-needs-in-england/20*|*special-educational-needs-in-england-january-20**"))
