@@ -23,7 +23,7 @@ library(rvest)
 library(xml2)
 library(httr)
 
-devtools::source_url("https://github.com/stefaniemeliss/scm_feasibility/blob/main/functions.R?raw=TRUE")
+devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
 
 # determine header information
 headers = c(
