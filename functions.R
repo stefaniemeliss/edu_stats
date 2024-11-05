@@ -298,10 +298,15 @@ download_data_from_url <- function(url){
   # retrieve raw content from request
   cat("\nDownloading file from url...\n")
   cat("\t", url, "\n")
+  cat("\tto", file_name, "\n")
   bin <- content(request, "raw")
   
   # write binary data to file
   writeBin(bin, file_name)
+  while (!file.exists(file_name)) {
+    Sys.sleep(1)
+  }
+  
   cat("\t...done\n")
   
   
