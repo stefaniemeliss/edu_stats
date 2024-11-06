@@ -582,3 +582,32 @@ dict$explanation <- c("academic year",
 # save file
 write.csv(dict, file = file.path(dir_misc, "meta_spc.csv"), row.names = F)
 
+#### extract postcodes ####
+
+# extract
+pcd <- as.data.frame(na.omit(unique(spc$school_postcode)))
+
+# Define a function to save data in chunks
+save_in_chunks <- function(data, chunk_size = 10000, file_prefix = "extracted_data", output_folder = ".") {
+  
+  # get data dimensions
+  n <- nrow(data)
+  num_chunks <- ceiling(n / chunk_size)
+  
+  # Ensure the output folder exists
+  if (!dir.exists(output_folder)) {
+    dir.create(output_folder, recursive = TRUE)
+  }
+  
+  # save each chunk as csv
+  for (i in seq_len(num_chunks)) {
+    start_row <- (i - 1) * chunk_size + 1
+    end_row <- min(i * chunk_size, n)
+    chunk <- data[start_row:end_row, ]
+    file_name <- file.path(output_folder, paste0(file_prefix, "_part", i, ".csv"))
+    write.table(chunk, file_name, row.names = FALSE, col.names = FALSE, quote = FALSE, sep = ",")
+  }
+}
+
+save_in_chunks(pcd, chunk_size = 10000, file_prefix = "school_postcodes_2010_2023", output_folder = dir_misc)
+
