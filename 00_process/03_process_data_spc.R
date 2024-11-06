@@ -303,6 +303,9 @@ df <- spc %>%
              form_7_school_type, form_7_school_type_description, middle_school),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
   ungroup() %>%
+  # save the specific columns as CSV
+  {data.table::fwrite(select(., time_period, urn, laestab, old_la_code, estab, school, school_postcode), 
+                      file.path(dir_data,"data_identifiers.csv")); .} %>%
   # join with scaffold
   full_join(x = scaffold, y = ., by = id_cols) %>%
   # sort data
@@ -578,3 +581,4 @@ dict$explanation <- c("academic year",
                       "average class size")
 # save file
 write.csv(dict, file = file.path(dir_misc, "meta_spc.csv"), row.names = F)
+
