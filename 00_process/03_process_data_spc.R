@@ -582,7 +582,7 @@ dict$explanation <- c("academic year",
 # save file
 write.csv(dict, file = file.path(dir_misc, "meta_spc.csv"), row.names = F)
 
-#### extract postcodes ####
+#### extract postcodes and process deprivation data ####
 
 extract_postcodes = F
 
@@ -616,3 +616,19 @@ if(extract_postcodes){
   
 }
 
+# outside of script, upload files to https://imd-by-postcode.opendatacommunities.org/imd/2019 to get deprivation data
+
+# process deprivation data
+process_deprivation_data = T
+if(process_data_pcd){
+  
+  # list files
+  file_list <- list.files(path = dir_misc, pattern = "2019-deprivation", full.names = T)
+  
+  # read and row bind csv files
+  depr <- data.table::rbindlist(lapply(file_list, data.table::fread))
+  
+  # file file
+  data.table::fwrite(depr, file.path(dir_misc, "data_deprivation_2019_by_school_postcodes_2010_2023.csv"))
+  
+}
