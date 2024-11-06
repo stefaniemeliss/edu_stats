@@ -583,6 +583,7 @@ dict$explanation <- c("academic year",
                       "single sex or mixed school",
                       "religious denomination of school",
                       "admissions policy",
+                      "IDACI Decile (1 = most deprived, 10 = least deprived)",
                       "headcount pupils",
                       "FTE pupils",
                       "number of pupils of compulsary age and above",
@@ -646,7 +647,7 @@ if(extract_postcodes){
 # process deprivation data
 process_deprivation_data = F
 
-if(process_data_pcd){
+if(process_deprivation_data){
   
   # list files
   file_list <- list.files(path = dir_misc, pattern = "2019-deprivation", full.names = T)
