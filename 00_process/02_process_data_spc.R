@@ -23,10 +23,6 @@ dir_data <- file.path(dir, "data")
 dir_misc <- file.path(dir, "misc")
 dir_in <- file.path(dir_data, "school-pupils-and-their-characteristics")
 
-# # derive URNs
-# school_list <- read.csv(file = file.path(dir_misc, "schools_list.csv"))
-# urn_list <- school_list$urn
-
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:23, 11:24)
 
@@ -99,9 +95,6 @@ for (i in seq_along(start:finish)) {
   # remove school that was registered twice
   tmp_p <- tmp_p[!(tmp_p$urn == 143840 & tmp_p$estab == 6008), ]
   
-  # subset data to only include relevant schools
-  #tmp_p <- tmp_p %>% filter(urn %in% urn_list)
-  
   # format opendate if it exists
   if ("opendate" %in% names(tmp_p)) {
     tmp_p$opendate <- as.Date(tmp_p$opendate, format =  "%d/%m/%Y")
@@ -111,11 +104,8 @@ for (i in seq_along(start:finish)) {
     tmp_p$open_date <- as.Date(tmp_p$open_date, format =  "%d/%m/%Y")
   }
   
-  
   # filter to remove columns
   tmp_p <- tmp_p[, !grepl("_time_|unclassified|key_stage|early_year|nursery|reception|subsi", names(tmp_p))]
-  
-  # test <- tmp_p %>% select_if(is.character)
   
   # clean data
   tmp_p <- tmp_p %>% 
@@ -165,9 +155,6 @@ for (i in seq_along(start:finish)) {
   
   # remove school that was registered twice
   tmp_c <- tmp_c[!(tmp_c$urn == 143840 & tmp_c$estab == 6008), ]
-  
-  # subset data to only include relevant schools
-  #tmp_c <- tmp_c %>% filter(urn %in% urn_list)
   
   # filter to remove columns
   tmp_c <- tmp_c[, !grepl("key_stage|classes_of_size|exc|lawful|large", names(tmp_c))]
@@ -233,7 +220,6 @@ for (i in seq_along(start:finish)) {
   if ("typeofestablishment" %in% names(tmp)) {
     tmp <- rename(tmp, type_of_establishment = typeofestablishment)
   }
-  
   
   # combine across years
   if (year == start) {
