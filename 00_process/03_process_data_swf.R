@@ -10,7 +10,7 @@ rm(list = ls())
 library(kableExtra)
 library(dplyr)
 
-devtools::source_url("https://github.com/stefaniemeliss/scm_feasibility/blob/main/functions.R?raw=TRUE")
+devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
 
 # define directories
 dir <- getwd()
