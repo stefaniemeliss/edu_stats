@@ -18,31 +18,29 @@ dir_data <- file.path(dir, "data")
 dir_misc <- file.path(dir, "misc")
 dir_in <- file.path(dir_data, "school-workforce-in-england")
 
-# derive URNs
-school_list <- read.csv(file = file.path(dir_misc, "schools_list.csv"))
-urn_list <- school_list$urn
-
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:22, 11:23)
-
-# create scaffold to safe data
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = urn_list))
-id_cols <- names(scaffold)
-
+years_list <- paste0(20, 10:23, 11:24)
+id_cols <- c("time_period", "urn")
 
 # Pupil to teacher ratios - school level #
 
 # read in data
 ptrs <- read.csv(file.path(dir_in, "2023", "data", "workforce_ptrs_2010_2023_sch.csv"))
-names(ptrs) <- tolower(gsub("X...", "", names(ptrs), fixed = T))
-names(ptrs)[names(ptrs) == "school_urn"] <- "urn"
 
-# select columns
-ptrs <- ptrs[, grepl("time_period|urn|fte|ratio", names(ptrs))]
+ptrs <- ptrs %>%
+  # rename columns 
+  rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
+  rename(urn = school_urn, laestab = school_laestab) %>%
+  rename_with(., ~gsub("_name", "", .)) %>%
+  # remove columns that are uninformative
+  select(where(~length(unique(na.omit(.x))) > 1)) %>%
+  as.data.frame()
 
-# subset data to only include relevant schools
-ptrs <- ptrs %>% filter(urn %in% urn_list)
+# # select columns
+# ptrs <- ptrs[, grepl("time_period|urn|fte|ratio", names(ptrs))]
+
+# # subset data to only include relevant schools
+# ptrs <- ptrs %>% filter(urn %in% urn_list)
 
 # Teacher absences - school level #
 
@@ -54,8 +52,11 @@ names(abs)[names(abs) == "school_urn"] <- "urn"
 # select columns
 abs <- abs[, grepl("time_period|urn|abs|day", names(abs))]
 
-# subset data to only include relevant schools
-abs <- abs %>% filter(urn %in% urn_list)
+# # subset data to only include relevant schools
+# abs <- abs %>% filter(urn %in% urn_list)
+
+# remove duplicated rows
+abs <- abs[!duplicated(abs), ]
 
 # Teacher pay - school level #
 
@@ -67,8 +68,11 @@ names(pay)[names(pay) == "school_urn"] <- "urn"
 # select columns
 pay <- pay[, grepl("time_period|urn|mean|headcount|pay", names(pay))]
 
-# subset data to only include relevant schools
-pay <- pay %>% filter(urn %in% urn_list)
+# # subset data to only include relevant schools
+# pay <- pay %>% filter(urn %in% urn_list)
+
+# remove duplicated rows
+pay <- pay[!duplicated(pay), ]
 
 # Teacher vacancies - school level #
 
@@ -80,8 +84,8 @@ names(vac)[names(vac) == "school_urn"] <- "urn"
 # select columns
 vac <- vac[, grepl("time_period|urn|vac|rate|tmp", names(vac))]
 
-# subset data to only include relevant schools
-vac <- vac %>% filter(urn %in% urn_list)
+# # subset data to only include relevant schools
+# vac <- vac %>% filter(urn %in% urn_list)
 
 # Size of the school workforce - school level #
 
@@ -93,17 +97,31 @@ names(swf)[names(swf) == "school_urn"] <- "urn"
 # select columns
 swf <- swf[, grepl("time_period|urn|teach", names(swf))]
 swf <- swf[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|leader|head", names(swf))]
-# swf <- swf[, grepl("time_period|urn|fte|hc|ratio|percent", names(swf))]
-# swf <- swf[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft", names(swf))]
-# swf <- swf[, grepl("time_period|urn|teach", names(swf))]
 
-# subset data to only include relevant schools
-swf <- swf %>% filter(urn %in% urn_list)
+# # subset data to only include relevant schools
+# swf <- swf %>% filter(urn %in% urn_list)
 
 # Workforce teacher characteristics - school level #
 
-dir_tmp <- file.path(dir_in, "2023", "supporting-files", "workforce_teacher_characteristics_school_2010_2023")
+pattern_wtc <- "workforce_teacher_characteristics_school_2010_2023"
+dir_wtc <- file.path(dir_in, "2023", "supporting-files")
+dir_tmp <- file.path(dir_wtc, pattern_wtc)
 
+unzip = F
+if (unzip) {
+  # determine zipped folder
+  zipped_folder <- list.files(path = dir_wtc, pattern = pattern_wtc, full.names = T)
+  
+  # create output folder
+  dir.create(dir_tmp)
+  
+  # unzip
+  unzip(zipped_folder, exdir = dir_tmp)
+  
+}
+
+
+# create vector with file names
 files <- list.files(path = dir_tmp, full.names = T)
 files <- files[!grepl("meta", files)]
 
@@ -121,7 +139,7 @@ for (f in 1:length(files)) {
   
   # subset data to only include relevant schools
   names(tmp)[names(tmp) == "school_urn"] <- "urn"
-  tmp <- tmp %>% filter(urn %in% urn_list)
+  # tmp <- tmp %>% filter(urn %in% urn_list)
   
   # select relevant columns
   tmp <- tmp[, names(tmp) %in% cols_to_keep]
@@ -225,7 +243,7 @@ tmp <- wtc %>%
     across(matches("fte_gender_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("hc_perc_gender_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_perc_gender_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-
+    
     tmp = rowSums(across(matches("hc_age_")), na.rm = T),
     across(matches("hc_age_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_age_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
@@ -237,7 +255,7 @@ tmp <- wtc %>%
     across(matches("fte_ethnicity_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("hc_perc_ethnicity_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_perc_ethnicity_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-
+    
     tmp = rowSums(across(matches("hc_grade_")), na.rm = T),
     across(matches("hc_grade_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_grade_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
@@ -281,28 +299,36 @@ apply(tmp, 2, function(x) {sum(is.na(x))})
 
 # combine all df #
 
-# merge dfs
-df <- merge(scaffold, abs, by = id_cols, all = T)
-df <- merge(df, pay, by = id_cols, all = T)
-df <- merge(df, ptrs, by = id_cols, all = T)
-df <- merge(df, vac, by = id_cols, all = T)
-df <- merge(df, swf, by = id_cols, all = T)
-df <- merge(df, tmp, by = id_cols, all = T)
+# create scaffold to safe data
+scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+                  data.frame(urn = unique(pay$urn)))
 
-
-# replace with NAs
-df <- df %>%
-  mutate(across(where(is.character), ~na_if(., "x"))) %>% # x = not available - information has not been collected or there are no estimates available at this level of aggregation.
-  mutate(across(where(is.character), ~na_if(., "z"))) %>% # z = not applicable - statistic cannot be produced. For example where a denominator is not available to produce a percentage.
-  mutate(across(where(is.character), ~na_if(., "c"))) %>% # c = confidential - where presentation of data would disclose confidential information
-  mutate(across(where(is.character), ~na_if(., "u"))) %>% # u = low reliability - values of the potentially low quality, for example where values of statistical significance have been calculated.
-  # remove the comma and then convert the resulting string to a numeric type
-  mutate(across(where(is.character), \(x) as.numeric(gsub(",", "", x)))) %>%
-  as.data.frame()
-
+# process data
+df <- scaffold %>%
+  # merge all dfs
+  full_join(., ptrs, by = id_cols) %>%
+  full_join(., pay, by = id_cols) %>% 
+  full_join(., abs, by = id_cols) %>%
+  full_join(., vac, by = id_cols) %>%
+  full_join(., swf, by = id_cols) %>%
+  full_join(., tmp, by = id_cols) %>%
+  # replace with NAs
+  mutate(
+    # replace spaces and %
+    across(where(is.character), ~gsub("^\\s+|\\s+$|%", "", .)),
+    # x = not available - information has not been collected or there are no estimates available at this level of aggregation.
+    across(where(is.character), ~na_if(., "x")), 
+    # z = not applicable - statistic cannot be produced. For example where a denominator is not available to produce a percentage.
+    across(where(is.character), ~na_if(., "z")), 
+    # c = confidential - where presentation of data would disclose confidential information
+    across(where(is.character), ~na_if(., "c")), 
+    # u = low reliability - values of the potentially low quality, for example where values of statistical significance have been calculated.
+    across(where(is.character), ~na_if(., "u")), 
+    # replace comma and make numeric
+    across(pupils_fte:last_col(), \(x) as.numeric(gsub(",", "", x)))) %>%
+  # sort data
+  arrange(urn, time_period) %>% as.data.frame()
 
 # save data
 df <- df[with(df, order(urn, time_period)),]
-write.csv(df, file = file.path(dir_data, "data_swf.csv"), row.names = F)
-
-
+data.table::fwrite(df, file = file.path(dir_data, "data_swf.csv"), row.names = F)
