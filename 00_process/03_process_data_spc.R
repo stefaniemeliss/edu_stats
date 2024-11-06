@@ -312,6 +312,31 @@ df <- spc %>%
   arrange(urn, time_period) %>%
   as.data.frame()
 
+# add deprivation data #
+
+add_deprivation_data = T
+
+if (add_deprivation_data) {
+  
+  # read in file
+  depr <- data.table::fread(file.path(dir_misc, "data_deprivation_2019_by_school_postcodes_2010_2023.csv"))
+  
+  # Income Deprivation Affecting Children Index (IDACI)
+  # IDACI decile categorises areas into ten groups (deciles) based on the proportion of children living in income-deprived households. 
+  # Each decile represents 10% of areas, with decile 1 being the most deprived and decile 10 being the least deprived.
+  
+  # change col names
+  depr[, school_postcode := Postcode]
+  depr[, idaci_decile := `IDACI Decile`]
+  
+  # subset data
+  depr <- depr[`Postcode Status` != "**UNMATCHED**", .(school_postcode, idaci_decile)]
+  
+  # merge with df
+  df <- df %>% 
+    full_join(., as.data.frame(depr), by = "school_postcode") %>% as.data.frame()
+}
+
 
 # headcount
 # Headcount of pupils	= Full-time + part-time pupils
@@ -619,7 +644,8 @@ if(extract_postcodes){
 # outside of script, upload files to https://imd-by-postcode.opendatacommunities.org/imd/2019 to get deprivation data
 
 # process deprivation data
-process_deprivation_data = T
+process_deprivation_data = F
+
 if(process_data_pcd){
   
   # list files
