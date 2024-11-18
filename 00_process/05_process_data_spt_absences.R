@@ -6,17 +6,13 @@ rm(list = ls())
 library(kableExtra)
 library(dplyr)
 
-devtools::source_url("https://github.com/stefaniemeliss/scm_feasibility/blob/main/functions.R?raw=TRUE")
+devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
 
 # define directories
 dir <- getwd()
 dir_data <- file.path(dir, "data")
 dir_misc <- file.path(dir, "misc")
 in_dir <- file.path(dir_data, "performance-tables")
-
-# derive URNs
-school_list <- read.csv(file = file.path(dir_misc, "schools_list.csv"))
-urn_list <- school_list$urn
 
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:22, 11:23)
@@ -27,8 +23,7 @@ years_list <- paste0(20, 10:22, 11:23)
 start <- 2010
 finish <- 2022
 
-# create scaffold to safe data
-scaffold <- merge(data.frame(time_period = years_list), data.frame(urn = urn_list))
+id_cols <- c("time_period", "urn")
 
 for (year in start:finish) {
   
@@ -47,7 +42,9 @@ for (year in start:finish) {
   
   # subset data to only include relevant schools
   names(abs) <- tolower(names(abs))
-  abs <- abs %>% filter(urn %in% urn_list)
+  
+  # exclude national-level data
+  abs <- abs %>% filter(! toupper(la) %in% c("NAT"))
   
   # Figures are suppressed (“supp”) where they concern fewer than 10 pupils.
   abs <- apply(abs, 2, function(x) {ifelse(x == "SUPP", NA, as.numeric(x))}) %>% as.data.frame()
@@ -64,9 +61,15 @@ for (year in start:finish) {
   
 }
 
+# create scaffold to safe data
+urn_list <- unique(df$urn)
+sum(is.na(urn_list))
+
+scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+                  data.frame(urn = urn_list))
+
 # merge with scaffold
-df <- merge(scaffold, df, by = c("time_period", "urn"), all.x = T)
-#names(df)[names(df) == "urn"] <- "school_urn"
+df <- merge(scaffold, df, by = id_cols, all.x = T)
 
 # save data
 df <- df[with(df, order(urn, time_period)),]
