@@ -21,17 +21,10 @@ dir_data <- file.path(dir, "data")
 dir_misc <- file.path(dir, "misc")
 dir_in <- file.path(dir_data, "special-educational-needs-in-england")
 
-# derive URNs
-school_list <- read.csv(file = file.path(dir_misc, "schools_list.csv"))
-urn_list <- school_list$urn
-
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:23, 11:24)
 
-# create scaffold to safe data
-scaffold <- merge(data.frame(time_period = years_list),
-                  data.frame(urn = urn_list))
-id_cols <- names(scaffold)
+id_cols <- c("time_period", "urn")
 
 # rename folders that currently only have one year included (data collected in Jan)
 rename_folders <- F
@@ -70,15 +63,18 @@ for (i in seq_along(start:finish)) {
   academic_year <- paste0(year,"-", year+1)
   
   # read in data
-  tmp <- read.csv(file = files[i])
+  tmp <- read.csv(file = files[i], fileEncoding="latin1")
   names(tmp) <- gsub("X...", "", names(tmp), fixed = T)
   
   # subset data to only include relevant schools
   names(tmp) <- tolower(names(tmp))
-  tmp <- tmp %>% filter(urn %in% urn_list)
-  
+
   # filter to remove columns
   tmp <- tmp[, !grepl("primary|prov", names(tmp))]
+  
+  # check for any strings
+  cat(academic_year, "\n")
+  print(apply(tmp, 2, function(x) { unique(regmatches(x, gregexpr("[A-Za-z]+", x)))   }))
   
   # Figures are suppressed (“supp”) where they concern fewer than 10 pupils.
   tmp <- apply(tmp, 2, function(x) {ifelse(x == "x" | x == "z" | x == "." | x == "..", NA, as.numeric(x))}) %>%
@@ -101,6 +97,14 @@ for (i in seq_along(start:finish)) {
 
 
 #### extract relevant data ####
+
+# create scaffold to safe data
+urn_list <- unique(sen$urn)
+sum(is.na(urn_list))
+
+scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+                  data.frame(urn = urn_list))
+
 
 # number of pupils
 cols_to_merge <- c("pupils", "total.pupils")
@@ -214,7 +218,7 @@ df[, "npupsen"] <- df$npupsenelse + df$npupsenelk
 
 #### save data ####
 df <- df[with(df, order(urn, time_period)),]
-write.csv(df, file = file.path(dir_data, "data_sen.csv"), row.names = F)
+data.table::fwrite(df, file = file.path(dir_data, "data_sen.csv"), row.names = F)
 
 #### create var dict ####
 dict <- data.frame(variable = names(df)[!grepl("_tag", names(df))])
