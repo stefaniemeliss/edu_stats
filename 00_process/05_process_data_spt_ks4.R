@@ -6,17 +6,13 @@ rm(list = ls())
 library(kableExtra)
 library(dplyr)
 
-devtools::source_url("https://github.com/stefaniemeliss/scm_feasibility/blob/main/functions.R?raw=TRUE")
+devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
 
 # define directories
 dir <- getwd()
 dir_data <- file.path(dir, "data")
 dir_misc <- file.path(dir, "misc")
 in_dir <- file.path(dir_data, "performance-tables")
-
-# derive URNs
-school_list <- read.csv(file = file.path(dir_misc, "schools_list.csv"))
-urn_list <- school_list$urn
 
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:22, 11:23)
@@ -25,7 +21,7 @@ ks4_method <- c("standard", "standard", "standard", # (201011 - 201213)
                 "ptq_ee", "ptq_ee", # (201415 - 201516) DfE changed the policy on early entry to GCSEs, stating that only a student's first attempt at a GCSE would count in the performance tables. 
                 "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse" # (201617 - 202223)
 )
-timings = data.frame(time_period = years_list,
+timings = data.frame(time_period = as.numeric(years_list),
                      ks4_method = ks4_method,
                      reform_ptq = c(0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
                      reform_ee = c(0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1),
@@ -37,11 +33,8 @@ timings = data.frame(time_period = years_list,
 start <- 2010
 finish <- 2022
 
-# create scaffold to safe data
-scaffold <- merge(data.frame(time_period = years_list),
-                  data.frame(urn = urn_list))
-id_cols <- names(scaffold)
-scaffold <- merge(scaffold, timings, by = "time_period")
+id_cols <- c("time_period", "urn")
+
 
 for (year in start:finish) {
   
@@ -58,19 +51,25 @@ for (year in start:finish) {
   file_data <- list.files(path = dir_year, pattern = "england_ks4", full.names = T)
   if (file.exists(file_data)) {
     #print(file_data)
-    tmp <- read.csv(file = file_data)
-    names(tmp) <- gsub("X...", "", names(tmp), fixed = T)
+    tmp <- read.csv(file = file_data, fileEncoding="latin1")
+    names(tmp) <- gsub("X...|ï..", "", tolower(names(tmp)), fixed = T)
     
     # subset data to only include relevant schools
-    names(tmp) <- tolower(names(tmp))
-    tmp <- tmp %>% filter(urn %in% urn_list)
+    # select column that contains "rectype" information and filter to only include rectype==1
+    # record type (1=mainstream school; 2=special school; 4=local authority; 5=National (all schools); 7=National (maintained schools))
+    tmp <- tmp[tmp[, grep("rectype", names(tmp))] == 1, ]
     
+    # check for any strings
+    cat(academic_year, "\n")
+    print(apply(tmp, 2, function(x) { unique(regmatches(x, gregexpr("[A-Za-z]+", x)))   }))
+    
+
     # replace spaces and %
     tmp <- apply(tmp, 2, function(x) {ifelse(grepl(" |%", x), gsub(" |%", "", x), x)}) %>% 
       as.data.frame() 
     
     # Figures are suppressed (“supp”) where they concern fewer than 10 pupils.
-    tmp <- apply(tmp, 2, function(x) {ifelse(x == "SUPP" | x == "NE" | x == "" | x == " ", NA, as.numeric(x))}) %>% 
+    tmp <- apply(tmp, 2, function(x) {ifelse(x == "SUPP" | x == "NE" | x == "NP" | x == "LOWCOV" | x == "" | x == " ", NA, as.numeric(x))}) %>% 
       as.data.frame()
     
     # add year
@@ -92,7 +91,7 @@ for (year in start:finish) {
     
     if (grepl(".csv", file_meta[1])) {
       print("READ CSV")
-      tmp <- read.csv(file_meta[1])
+      tmp <- read.csv(file_meta[1], fileEncoding="latin1")
     } else if (grepl(".xlsx", file_meta[1])) {
       print("READ xlsx")
       tmp <- xlsx::read.xlsx(file_meta, sheetIndex = 1)
@@ -119,6 +118,16 @@ meta <- meta[with(meta, order(metafile.heading, time_period)), ]
 write.csv(meta, file = file.path(dir_misc, "meta_spt_ks4.csv"), row.names = F)
 
 ################
+
+# create scaffold to safe data
+urn_list <- unique(ks4$urn)
+sum(is.na(urn_list))
+
+scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+                  data.frame(urn = urn_list))
+
+scaffold <- merge(scaffold, timings, by = "time_period")
+
 
 # The main outcome measure in Key Stage 4 performance tables 
 # is the attainment of pupils in their General Certificate of Secondary Education (GCSE) exams 
@@ -323,7 +332,7 @@ df <- merge_timelines_across_columns(data_in = ks4,
 cols_to_merge <- c("ptgac5em", "ptgac5em_ptq", "ptgac5em_ptq_ee")
 new_col <- "ptgac5em"
 
-test <- merge_timelines_across_columns(data_in = ks4, 
+df <- merge_timelines_across_columns(data_in = ks4, 
                                      identifier_columns = id_cols, 
                                      column_vector = cols_to_merge,
                                      stem = new_col,
@@ -517,8 +526,7 @@ df <- merge(df, tmp, by = id_cols, all = T)
 # save data
 df <- merge(df, scaffold, by = id_cols, all = T)
 df <- df[with(df, order(urn, time_period)),]
-write.csv(df, file = file.path(dir_data, "data_spt_ks4.csv"), row.names = F)
-
+data.table::fwrite(df, file = file.path(dir_data, "data_spt_ks4.csv"), row.names = F)
 
 
 #################
