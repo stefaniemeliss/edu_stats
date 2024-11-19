@@ -4,8 +4,9 @@ setup_environment <- function() {
   # Prevent scientific notation
   options(scipen = 999)
   
-  # Empty the workspace
-  rm(list = ls())
+  # Empty the workspace in the global environment except for this function
+  current_function <- "setup_environment"
+  rm(list = setdiff(ls(envir = .GlobalEnv), current_function), envir = .GlobalEnv)
   
   # Define the directory
   dir <- getwd()
