@@ -100,7 +100,9 @@ merge_staggered_timelines_across_columns <- function(data_in = df_in,
     # transform into long format
     reshape2::melt(id = identifier_columns, variable.name = tag, value.name = stem) %>%
     # change variable levels
-    mutate(time_period = plyr::mapvalues(get(tag), column_vector, variable_levels, warn_missing = TRUE))
+    mutate(time_period = plyr::mapvalues(get(tag), column_vector, variable_levels, warn_missing = TRUE)) %>%
+    # make numeric
+    mutate_at(c(identifier_columns, "time_period"), ~as.numeric(as.character(.)))
   
   
   # merge with data_out
