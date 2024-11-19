@@ -10,7 +10,7 @@ rm(list = ls())
 library(kableExtra)
 library(dplyr)
 
-devtools::source_url("https://github.com/stefaniemeliss/scm_feasibility/blob/main/functions.R?raw=TRUE")
+devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
 
 # define directories
 dir <- getwd()
@@ -18,23 +18,16 @@ dir_data <- file.path(dir, "data")
 dir_misc <- file.path(dir, "misc")
 dir_in <- file.path(dir_data, "performance-tables")
 
-# derive URNs
-school_list <- read.csv(file = file.path(dir_misc, "schools_list.csv"))
-urn_list <- school_list$urn
-
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:22, 11:23)
+
+id_cols <- c("time_period", "urn")
 
 ##### performance tables #####
 
 # determine years of interest
 start <- 2010
 finish <- 2022
-
-# create scaffold to safe data
-scaffold <- merge(data.frame(time_period = years_list),
-                  data.frame(urn = urn_list))
-id_cols <- names(scaffold)
 
 for (year in start:finish) {
   
@@ -53,15 +46,24 @@ for (year in start:finish) {
   
   # subset data to only include relevant schools
   names(tmp) <- tolower(names(tmp))
-  tmp <- tmp %>% filter(urn %in% urn_list)
+  
+  # check for any strings
+  cat(academic_year, "\n")
+  print(apply(tmp, 2, function(x) { unique(regmatches(x, gregexpr("[A-Za-z]+", x)))   }))
+  
+  # exclude national-level data
+  tmp <- tmp %>% filter(! toupper(urn) %in% c("NAT"))
   
   # replace spaces and %
   tmp <- apply(tmp, 2, function(x) {ifelse(grepl(" |%", x), gsub(" |%", "", x), x)}) %>% 
     as.data.frame()
   
   # Figures are suppressed (“supp”) where they concern fewer than 10 pupils.
-  tmp <- apply(tmp, 2, function(x) {ifelse(x == "SUPP" | x == "NE" | x == "" | x == " ", NA, as.numeric(x))}) %>%
+  tmp <- apply(tmp, 2, function(x) {ifelse(x == "SUPP" | x == "NP" | x == "" | x == " ", NA, as.numeric(x))}) %>%
     as.data.frame()
+  
+  # Exclude rows that fully consist of NA values
+  tmp <- tmp[apply(tmp, 1, function(row) !all(is.na(row))), ]
   
   # add year
   tmp$time_period <- as.numeric(gsub("-20", "", academic_year))
@@ -91,6 +93,14 @@ meta <- meta[with(meta, order(variable, time_period)), ]
 write.csv(meta, file = file.path(dir_misc, "meta_spt_census.csv"), row.names = F)
 
 # process census data #
+
+# create scaffold to safe data
+urn_list <- unique(census$urn)
+sum(is.na(urn_list))
+
+scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+                  data.frame(urn = urn_list))
+
 
 # Total number of pupils on roll (all ages)
 # TOTPUPSENDN - Total number of pupils on roll (all ages) - 2011-11 to 2013/14
@@ -146,4 +156,4 @@ df <- merge(df, census[, c(id_cols,
 
 # save data
 df <- df[with(df, order(urn, time_period)),]
-write.csv(df, file = file.path(dir_data, "data_spt_census.csv"), row.names = F)
+data.table::fwrite(df, file = file.path(dir_data, "data_spt_census.csv"), row.names = F)
