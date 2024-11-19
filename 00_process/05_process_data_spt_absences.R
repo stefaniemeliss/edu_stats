@@ -43,6 +43,10 @@ for (year in start:finish) {
   # subset data to only include relevant schools
   names(abs) <- tolower(names(abs))
   
+  # check for any strings
+  cat(academic_year, "\n")
+  print(apply(abs, 2, function(x) { unique(regmatches(x, gregexpr("[A-Za-z]+", x)))   }))
+  
   # exclude national-level data
   abs <- abs %>% filter(! toupper(la) %in% c("NAT"))
   
@@ -73,4 +77,4 @@ df <- merge(scaffold, df, by = id_cols, all.x = T)
 
 # save data
 df <- df[with(df, order(urn, time_period)),]
-write.csv(df, file = file.path(dir_data, "data_spt_absences.csv"), row.names = F)
+data.table::fwrite(df, file = file.path(dir_data, "data_spt_absences.csv"), row.names = F)
