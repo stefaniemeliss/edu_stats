@@ -3,29 +3,24 @@
 options(scipen = 999)
 # empty work space
 rm(list = ls())
+gc()
 
 # load libraries
 library(kableExtra)
 library(dplyr)
 
-devtools::source_url("https://github.com/stefaniemeliss/scm_feasibility/blob/main/functions.R?raw=TRUE")
+devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
 
 # define directories
 dir <- getwd()
 dir_data <- file.path(dir, "data")
 dir_misc <- file.path(dir, "misc")
 
-# derive URNs
-school_list <- read.csv(file = file.path(dir_misc, "schools_list.csv"))
-urn_list <- school_list$urn
-
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:23, 11:24)
 
-# create scaffold to safe data
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = urn_list))
-id_cols <- names(scaffold)
+id_cols <- c("time_period", "urn")
+
 
 #### data on school capacity ####
 
@@ -45,7 +40,6 @@ names(cap) <- tolower(gsub("X...", "", names(cap), fixed = T))
 names(cap)[names(cap) == "school_urn"] <- "urn"
 
 # subset data to only include relevant schools
-cap <- cap %>% filter(urn %in% urn_list)
 cap <- cap %>% filter(time_period != 200910)
 
 # remove columns
@@ -53,6 +47,7 @@ cap <- cap[, grepl("time_period|urn|pupils|capacity", names(cap))]
 cap <- cap[, !grepl("percent", names(cap))]
 
 # Figures are suppressed (“supp”) where they concern fewer than 10 pupils.
+print(apply(cap, 2, function(x) { unique(regmatches(x, gregexpr("[A-Za-z]+", x)))   }))
 cap <- apply(cap, 2, function(x) {ifelse(x == "z" | x == "x", NA, as.numeric(x))}) %>%
   as.data.frame()
 
@@ -63,18 +58,31 @@ names(cap)[c(-1, -2)] <- c("npuptot__cap", "cap_prim", "cap_sec", "npupovcap")
 # percentage of pupils over capacity
 cap$pnpupovcap <- cap$npupovcap / cap$npuptot__cap
 
+# create scaffold to safe data
+urn_list <- unique(cap$urn)
+sum(is.na(urn_list))
+
+scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+                  data.frame(urn = as.numeric(urn_list)))
+
 # combine with scaffold
 cap <- merge(scaffold, cap, by = id_cols, all = T)
 
+tmp <- cap %>% group_by(time_period, urn) %>% summarise(obs = n())
+
 #### read in previously created files ####
 
-spc <- read.csv(file.path(dir_data, "data_spc.csv")) # census data collected in January of academic year - Spring census
-sen <- read.csv(file.path(dir_data, "data_sen.csv"))
-spt <- read.csv(file.path(dir_data, "data_spt_census.csv")) 
+spc <- data.table::fread(file.path(dir_data, "data_spc.csv")) # census data collected in January of academic year - Spring census
+sen <- data.table::fread(file.path(dir_data, "data_sen.csv"))
+spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
 
 df <- merge(spc, sen, by = id_cols, all = T)
 df <- merge(df, spt, by = id_cols, all = T)
 df <- merge(df, cap, by = id_cols, all = T)
+
+df <- as.data.frame(df)
+
+rm(cap, spc, sen, spt)
 
 #### process combined data ####
 
@@ -104,21 +112,30 @@ tmp <- fix_roundings(var_rd = "npuptot__spc", var_nrd = "npuptot__sptcensus",
 # select rows
 df <- merge(df, tmp[, c(id_cols, col_tot)], by = id_cols, all = T)
 
-
 # select columns
 tmp <- df[, c(id_cols, col_tot, "npuptot__sen", "npuptot__cap", "npuptot__sptcensus")]
 
 # check NAs
 apply(tmp, 2, FUN = function(x){sum(is.na(x))})
-tmpp <- tmp[is.na(tmp[, col_tot]), ] # subset variable with smallest number of NAs
 
 # for those that have NAs in npuptot, fill with information included in capacity data
 tmp[, col_tot] <- ifelse(is.na(tmp[, col_tot]), tmp$npuptot__cap, tmp[, col_tot])
 apply(tmp, 2, FUN = function(x){sum(is.na(x))})
 
 out <- tmp[, c(id_cols, col_tot)]
+out <- out[!duplicated(out),]
+gc()
 
 # with the total number of pupils on role, calculate percentage of pupils based on SPC data #
+
+# number of pupils female
+new_col <- "npupf"
+col_n <- "npupf"
+col_p <- "pnpupf"
+
+out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
+out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # % of pupils known to be eligible for free school meals	
 # Number of pupils know to be eligible for FSM expressed as a percentage of the total number of pupils
@@ -126,53 +143,60 @@ out <- tmp[, c(id_cols, col_tot)]
 col_n <- "npupfsm_e"
 col_p <- "pnpupfsm_e"
 
-out <- merge(out, df[, c(id_cols, col_n)], by = id_cols)
+out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # percentage of pupils taking a free school meal on census day	
 
 col_n <- "npupfsm_t"
 col_p <- "pnpupfsm_t"
 
-out <- merge(out, df[, c(id_cols, col_n)], by = id_cols)
+out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # FSM calculation in Performance Tables
 # npup_calcspt - Number of pupils (used for FSM calculation in Performance Tables)
 # npupfsm_e_spt - number of pupils known to be eligible for free school meals (School Performance Tables)
 # pnpupfsm_e_spt - percentage of pupils known to be eligible for free school meals (School Performance Tables)
 out <- merge(out, df[, c(id_cols, "npup_calcspt", "npupfsm_e_spt", "pnpupfsm_e_spt")], by = id_cols)
+out <- out[!duplicated(out),]
 
 # % of pupils whose first language is known or believed to be other than English
 col_n <- "npupeal"
 col_p <- "pnpupeal"
 
-out <- merge(out, df[, c(id_cols, col_n)], by = id_cols)
+out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # % of pupils classified as white British ethnic origin
 
 col_n <- "numeowb"
 col_p <- "pnumeowb"
 
-out <- merge(out, df[, c(id_cols, col_n)], by = id_cols)
+out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # % of pupils classified as Black ethnic origin
 
 col_n <- "numeobl"
 col_p <- "pnumeobl"
 
-out <- merge(out, df[, c(id_cols, col_n)], by = id_cols)
+out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # % of pupils classified as Asian ethnic origin
 
 col_n <- "numeoas"
 col_p <- "pnumeoas"
 
-out <- merge(out, df[, c(id_cols, col_n)], by = id_cols)
+out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # class size data
 # nclt1t - total number of classes taught by one teacher
@@ -181,11 +205,12 @@ out[, col_p] <- out[, col_n] / out[, col_tot] * 100
 col_n <- "npupclt1t"
 col_tot <- "nclt1t"
 
-out <- merge(out, df[, c(id_cols, col_tot, col_n)], by = id_cols)
+out <- merge(out, df[, c(id_cols, col_tot, col_n)], by = id_cols, all = T)
 
 # avgclsize - average size of one teacher classes = Number of pupils divided by number of classes
 col_p <- "avgclsize"
 out[, col_p] <- out[, col_n] / out[, col_tot]
+out <- out[!duplicated(out),]
 
 # special educational needs data #
 
@@ -209,6 +234,8 @@ tmp <- fix_roundings(var_rd = col_n, var_nrd = "tsena",
 out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols, all = T)
 # compute perc
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
+
 # check <- c("tsena", "psena")
 # out <- merge(out, df[, c(id_cols, check)], by = id_cols)
 
@@ -228,6 +255,7 @@ tmp <- fix_roundings(var_rd = col_n, var_nrd = "totsenap",
 out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols, all = T)
 # compute perc
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # SEN Statement (SEN Code of Practice 2001)
 
@@ -247,6 +275,7 @@ tmp <- fix_roundings(var_rd = col_n, var_nrd = "totsenst",
 out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols, all = T)
 # compute perc
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # eligible pupils with SEN support (SEN Code of Practice 2014)
 
@@ -266,6 +295,8 @@ tmp <- fix_roundings(var_rd = col_n, var_nrd = "tsenelk",
 out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols, all = T)
 # compute perc
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
+
 # check <- c("tsenelk", "psenelk")
 # out <- merge(out, df[, c(id_cols, check)], by = id_cols)
 
@@ -286,6 +317,8 @@ tmp <- fix_roundings(var_rd = col_n, var_nrd = "tsenelse",
 out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols, all = T)
 # compute perc
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
+
 # check <- c("tsenelse", "psenelse")
 # out <- merge(out, df[, c(id_cols, check)], by = id_cols)
 
@@ -307,8 +340,9 @@ tmp <- merge_timelines_across_columns(data_in = tmp,
                                      data_out = tmp)
 
 
-out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols)
+out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # pupils with EHC plan/Statement of SEN (all years)
 
@@ -326,8 +360,9 @@ tmp <- merge_timelines_across_columns(data_in = tmp,
                                       stem = col_n,
                                       data_out = tmp)
 
-out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols)
+out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+out <- out[!duplicated(out),]
 
 # pupils with SEN provision - EHC plan/Statement of SEN or SEN support/School Action/School Action plus
 
@@ -355,8 +390,7 @@ apply(data, 2, FUN = function(x){sum(is.na(x))})
 
 # save file
 data <- data[with(data, order(urn, time_period)),]
-write.csv(data, file = file.path(dir_data, "data_pupils.csv"), row.names = F)
-
+data.table::fwrite(df, file = file.path(dir_data, "data_pupils.csv"), row.names = F)
 
 # # code to debug!
 # col_n <- "npupfsm_e"
