@@ -10,6 +10,7 @@
 options(scipen = 999)
 # empty work space
 rm(list = ls())
+gc()
 
 # load libraries
 library(kableExtra)
@@ -239,7 +240,7 @@ for (i in seq_along(start:finish)) {
 urn_list <- unique(spc$urn)
 
 scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = urn_list))
+                  data.frame(urn = as.numeric(urn_list)))
 
 # only select columns that have more than 1 unique observation
 df <- spc %>% 
@@ -372,6 +373,17 @@ df <- merge_timelines_across_columns(data_in = spc,
                                      column_vector = cols_to_merge,
                                      stem = new_col,
                                      data_out = df)
+
+# number of pupils female
+cols_to_merge <- c("headcount_total_girls", "headcount_total_female")
+new_col <- "npupf"
+
+df <- merge_timelines_across_columns(data_in = spc, 
+                                     identifier_columns = id_cols, 
+                                     column_vector = cols_to_merge,
+                                     stem = new_col,
+                                     data_out = df)
+
 
 # number of pupils known to be eligible for free school meals
 cols_to_merge <- c("number_of_pupils_known_to_be_eligible_for_free_school_meals", 
@@ -544,6 +556,11 @@ df <- merge_timelines_across_columns(data_in = spc,
                                      data_out = df)
 
 #### save data ####
+
+# remove duplicates
+df <- df[!duplicated(df), ]
+
+# save file
 df <- df[with(df, order(urn, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_spc.csv"), row.names = F)
 
@@ -587,6 +604,7 @@ dict$explanation <- c("academic year",
                       "headcount pupils",
                       "FTE pupils",
                       "number of pupils of compulsary age and above",
+                      "number of pupils female",
                       "number of pupils eligible for FSM",
                       "perc of pupils eligible for FSM",
                       "number of pupils taking FSM",
