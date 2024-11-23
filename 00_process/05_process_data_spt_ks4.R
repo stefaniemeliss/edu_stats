@@ -1,6 +1,7 @@
 options(scipen = 999)
 # empty work space
 rm(list = ls())
+gc()
 
 # load libraries
 library(kableExtra)
@@ -124,7 +125,7 @@ urn_list <- unique(ks4$urn)
 sum(is.na(urn_list))
 
 scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = urn_list))
+                  data.frame(urn = as.numeric(urn_list)))
 
 scaffold <- merge(scaffold, timings, by = "time_period")
 
@@ -525,6 +526,10 @@ df <- merge(df, tmp, by = id_cols, all = T)
 
 # save data
 df <- merge(df, scaffold, by = id_cols, all = T)
+
+# remove duplicates
+df <- df[!duplicated(df), ]
+
 df <- df[with(df, order(urn, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_spt_ks4.csv"), row.names = F)
 

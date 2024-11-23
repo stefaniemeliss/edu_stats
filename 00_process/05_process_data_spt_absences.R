@@ -1,6 +1,7 @@
 options(scipen = 999)
 # empty work space
 rm(list = ls())
+gc()
 
 # load libraries
 library(kableExtra)
@@ -70,10 +71,13 @@ urn_list <- unique(df$urn)
 sum(is.na(urn_list))
 
 scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = urn_list))
+                  data.frame(urn = as.numeric(urn_list)))
 
 # merge with scaffold
 df <- merge(scaffold, df, by = id_cols, all.x = T)
+
+# remove duplicates
+df <- df[!duplicated(df), ]
 
 # save data
 df <- df[with(df, order(urn, time_period)),]
