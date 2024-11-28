@@ -43,8 +43,7 @@ names(cap)[names(cap) == "school_urn"] <- "urn"
 cap <- cap %>% filter(time_period != 200910)
 
 # remove columns
-cap <- cap[, grepl("time_period|urn|pupils|capacity", names(cap))]
-cap <- cap[, !grepl("percent", names(cap))]
+cap <- cap[, grepl("time_period|urn|pupils_on_roll", names(cap))]
 
 # Figures are suppressed (“supp”) where they concern fewer than 10 pupils.
 print(apply(cap, 2, function(x) { unique(regmatches(x, gregexpr("[A-Za-z]+", x)))   }))
@@ -52,23 +51,25 @@ cap <- apply(cap, 2, function(x) {ifelse(x == "z" | x == "x", NA, as.numeric(x))
   as.data.frame()
 
 # rename
-names(cap)[c(-1, -2)] <- c("npuptot__cap", "cap_prim", "cap_sec", "npupovcap")
+names(cap)[c(-1, -2)] <- c("npuptot__cap")
 # "npuptot__cap" = Number of pupils on roll
 
-# percentage of pupils over capacity
-cap$pnpupovcap <- cap$npupovcap / cap$npuptot__cap
-
-# create scaffold to safe data
-urn_list <- unique(cap$urn)
-sum(is.na(urn_list))
-
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = as.numeric(urn_list)))
-
-# combine with scaffold
-cap <- merge(scaffold, cap, by = id_cols, all = T)
-
+# check for duplicate entries
 tmp <- cap %>% group_by(time_period, urn) %>% summarise(obs = n())
+
+# Group the data by the 'urn' column
+cap <- cap %>%
+  group_by(time_period, urn) %>%
+  # Use mutate to update columns within each group
+  mutate(
+    # Set npuptot__cap to NA if the group has more than one row
+    npuptot__cap = ifelse(n() > 1, NA, npuptot__cap)
+  ) %>%
+  # Remove the grouping structure after the operation
+  ungroup() %>%
+  # Remove rows with any NA values
+  filter(complete.cases(.))
+  
 
 #### read in previously created files ####
 
@@ -77,12 +78,12 @@ sen <- data.table::fread(file.path(dir_data, "data_sen.csv"))
 spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
 
 # fix postcode
-spc[, school_postcode := gsub("%20", "", school_postcode)]
+spc[, school_postcode := gsub("%20", " ", school_postcode)]
 
 # combine data.tables
-df <- merge(spc, sen, by = id_cols, all = T)
-df <- merge(df, spt, by = id_cols, all = T)
-df <- merge(df, cap, by = id_cols, all = T)
+df <- merge(spc, sen, by = id_cols, all.x = T)
+df <- merge(df, spt, by = id_cols, all.x = T)
+df <- merge(df, cap, by = id_cols, all.x = T)
 
 df <- as.data.frame(df)
 
@@ -114,7 +115,7 @@ tmp <- fix_roundings(var_rd = "npuptot__spc", var_nrd = "npuptot__sptcensus",
                      data_in = df)
 
 # select rows
-df <- merge(df, tmp[, c(id_cols, col_tot)], by = id_cols, all = T)
+df <- merge(df, tmp[, c(id_cols, col_tot)], by = id_cols, all.x = T)
 
 # select columns
 tmp <- df[, c(id_cols, 
