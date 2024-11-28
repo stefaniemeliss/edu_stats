@@ -5,6 +5,7 @@
 options(scipen = 999)
 # empty work space
 rm(list = ls())
+gc()
 
 # load libraries
 library(kableExtra)
@@ -39,9 +40,6 @@ ptrs <- ptrs %>%
 # # select columns
 # ptrs <- ptrs[, grepl("time_period|urn|fte|ratio", names(ptrs))]
 
-# # subset data to only include relevant schools
-# ptrs <- ptrs %>% filter(urn %in% urn_list)
-
 # Teacher absences - school level #
 
 # read in data
@@ -51,9 +49,6 @@ names(abs)[names(abs) == "school_urn"] <- "urn"
 
 # select columns
 abs <- abs[, grepl("time_period|urn|abs|day", names(abs))]
-
-# # subset data to only include relevant schools
-# abs <- abs %>% filter(urn %in% urn_list)
 
 # remove duplicated rows
 abs <- abs[!duplicated(abs), ]
@@ -68,9 +63,6 @@ names(pay)[names(pay) == "school_urn"] <- "urn"
 # select columns
 pay <- pay[, grepl("time_period|urn|mean|headcount|pay", names(pay))]
 
-# # subset data to only include relevant schools
-# pay <- pay %>% filter(urn %in% urn_list)
-
 # remove duplicated rows
 pay <- pay[!duplicated(pay), ]
 
@@ -84,9 +76,6 @@ names(vac)[names(vac) == "school_urn"] <- "urn"
 # select columns
 vac <- vac[, grepl("time_period|urn|vac|rate|tmp", names(vac))]
 
-# # subset data to only include relevant schools
-# vac <- vac %>% filter(urn %in% urn_list)
-
 # Size of the school workforce - school level #
 
 # read in data
@@ -97,9 +86,6 @@ names(swf)[names(swf) == "school_urn"] <- "urn"
 # select columns
 swf <- swf[, grepl("time_period|urn|teach", names(swf))]
 swf <- swf[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|leader|head", names(swf))]
-
-# # subset data to only include relevant schools
-# swf <- swf %>% filter(urn %in% urn_list)
 
 # Workforce teacher characteristics - school level #
 
@@ -276,22 +262,22 @@ tmp <- wtc %>%
     tmp = NULL, 
     
     # compute aggregates
-    hc_age_Under_30 = rowSums(select(., "hc_age_Under_25", "hc_age_25_to_29"), na.rm = T),
-    hc_age_perc_Under_30 = hc_age_Under_30/hc * 100,
-    fte_age_Under_30 = rowSums(select(., "fte_age_Under_25", "fte_age_25_to_29"), na.rm = T),
-    fte_age_perc_Under_30 = fte_age_Under_30/fte * 100,
+    hc_age_under_30 = rowSums(select(., "hc_age_Under_25", "hc_age_25_to_29"), na.rm = T),
+    hc_age_perc_under_30 = hc_age_under_30/hc * 100,
+    fte_age_under_30 = rowSums(select(., "fte_age_Under_25", "fte_age_25_to_29"), na.rm = T),
+    fte_perc_age_under_30 = fte_age_under_30/fte * 100,
     
     hc_age_30_to_49 = rowSums(select(., "hc_age_30_to_39", "hc_age_40_to_49"), na.rm = T),
     hc_age_perc_30_to_49 = hc_age_30_to_49/hc * 100,
     fte_age_30_to_49 = rowSums(select(., "fte_age_30_to_39", "fte_age_40_to_49"), na.rm = T),
-    fte_age_perc_30_to_49 = fte_age_30_to_49/fte * 100,
+    fte_perc_age_30_to_49 = fte_age_30_to_49/fte * 100,
     
     hc_age_50_and_over = rowSums(select(., "hc_age_50_to_59", "hc_age_60_and_over"), na.rm = T),
     hc_age_perc_50_and_over = hc_age_50_and_over/hc * 100,
     fte_age_50_and_over = rowSums(select(., "fte_age_50_to_59", "fte_age_60_and_over"), na.rm = T),
-    fte_age_perc_50_and_over = fte_age_50_and_over/fte * 100
+    fte_perc_age_50_and_over = fte_age_50_and_over/fte * 100
   ) %>% #as.data.frame()
-  select(matches("time|urn|Female|White|British|Classroom|Under_30|30_to_49|50_and_over")) %>%
+  select(matches("time|urn|Female|White|British|Classroom|under_30|30_to_49|50_and_over")) %>%
   select(matches("time_period|urn|fte_perc")) %>%
   as.data.frame()
 
@@ -326,9 +312,11 @@ df <- scaffold %>%
     across(where(is.character), ~na_if(., "u")), 
     # replace comma and make numeric
     across(pupils_fte:last_col(), \(x) as.numeric(gsub(",", "", x)))) %>%
+  # make colnames lower case
+  rename_with(., tolower) %>%
   # sort data
   arrange(urn, time_period) %>% as.data.frame()
 
 # save data
-df <- df[with(df, order(urn, time_period)),]
+#df <- df[with(df, order(urn, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_swf.csv"), row.names = F)
