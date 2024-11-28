@@ -121,6 +121,8 @@ for (i in seq_along(start:finish)) {
       across(where(is.character), ~na_if(., "z")),
       # ‘NULL’ Unknown
       across(where(is.character), ~na_if(., "NULL")),
+      # information unknown
+      across(where(is.character), ~na_if(., "Unknown")),
       # suppression: percentage based on 1 or 2 pupils have been suppressed and published as “x"
       across(where(is.character), ~na_if(., "x")),
       # some data not collected from some schools
@@ -193,6 +195,8 @@ for (i in seq_along(start:finish)) {
       across(where(is.character), ~na_if(., "z")),
       # ‘NULL’ Unknown
       across(where(is.character), ~na_if(., "NULL")),
+      # information unknown
+      across(where(is.character), ~na_if(., "Unknown")),
       # suppression: percentage based on 1 or 2 pupils have been suppressed and published as “x"
       across(where(is.character), ~na_if(., "x")),
       # some data not collected from some schools
