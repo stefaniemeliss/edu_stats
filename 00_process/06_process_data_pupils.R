@@ -76,6 +76,10 @@ spc <- data.table::fread(file.path(dir_data, "data_spc.csv")) # census data coll
 sen <- data.table::fread(file.path(dir_data, "data_sen.csv"))
 spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
 
+# fix postcode
+spc[, school_postcode := gsub("%20", "", school_postcode)]
+
+# combine data.tables
 df <- merge(spc, sen, by = id_cols, all = T)
 df <- merge(df, spt, by = id_cols, all = T)
 df <- merge(df, cap, by = id_cols, all = T)
@@ -113,7 +117,15 @@ tmp <- fix_roundings(var_rd = "npuptot__spc", var_nrd = "npuptot__sptcensus",
 df <- merge(df, tmp[, c(id_cols, col_tot)], by = id_cols, all = T)
 
 # select columns
-tmp <- df[, c(id_cols, col_tot, "npuptot__sen", "npuptot__cap", "npuptot__sptcensus")]
+tmp <- df[, c(id_cols, 
+              
+              "estab", "laestab", 
+              "school", "school_postcode", "region", "region_code", "urban_rural",
+              "old_la_code", "la",
+              "phase_of_education", "school_type", "phase_type_grouping",           
+              "sex_of_school_description", "denomination", "admissions_policy", "idaci_decile",
+              
+              col_tot, "npuptot__sen", "npuptot__cap", "npuptot__sptcensus")]
 
 # check NAs
 apply(tmp, 2, FUN = function(x){sum(is.na(x))})
@@ -122,7 +134,13 @@ apply(tmp, 2, FUN = function(x){sum(is.na(x))})
 tmp[, col_tot] <- ifelse(is.na(tmp[, col_tot]), tmp$npuptot__cap, tmp[, col_tot])
 apply(tmp, 2, FUN = function(x){sum(is.na(x))})
 
-out <- tmp[, c(id_cols, col_tot)]
+out <- tmp[, c(id_cols,               
+               "estab", "laestab", 
+               "school", "school_postcode", "region", "region_code", "urban_rural",
+               "old_la_code", "la",
+               "phase_of_education", "school_type", "phase_type_grouping",           
+               "sex_of_school_description", "denomination", "admissions_policy", "idaci_decile",
+               col_tot)]
 out <- out[!duplicated(out),]
 gc()
 
@@ -333,12 +351,12 @@ out[, "npupsenelk2001"] <- out$npupsena + out$npupsenap # both were fixed above
 cols_to_merge <- c("npupsenelk2001", "npupsenelk2014") # also fixed above
 
 tmp <- out[, c(id_cols, cols_to_merge)]
+tmp <- tmp[!duplicated(tmp),]
 tmp <- merge_timelines_across_columns(data_in = tmp, 
                                      identifier_columns = id_cols, 
                                      column_vector = cols_to_merge,
                                      stem = col_n,
                                      data_out = tmp)
-
 
 out <- merge(out, tmp[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
@@ -354,6 +372,7 @@ col_p <- "pnpupsenelse"
 cols_to_merge <- c("npupsenst", "npupsenehcst") # fixed above
 
 tmp <- out[, c(id_cols, cols_to_merge)]
+tmp <- tmp[!duplicated(tmp),]
 tmp <- merge_timelines_across_columns(data_in = tmp, 
                                       identifier_columns = id_cols, 
                                       column_vector = cols_to_merge,
@@ -390,7 +409,7 @@ apply(data, 2, FUN = function(x){sum(is.na(x))})
 
 # save file
 data <- data[with(data, order(urn, time_period)),]
-data.table::fwrite(df, file = file.path(dir_data, "data_pupils.csv"), row.names = F)
+data.table::fwrite(data, file = file.path(dir_data, "data_pupils.csv"), row.names = F)
 
 # # code to debug!
 # col_n <- "npupfsm_e"
