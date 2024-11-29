@@ -237,21 +237,21 @@ for (i in seq_along(start:finish)) {
   
 }
 
-
 #### extract relevant data ####
 
-# create scaffold to safe data
-urn_list <- unique(spc$urn)
-
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = as.numeric(urn_list)))
 
 # only select columns that have more than 1 unique observation
 df <- spc %>% 
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>% 
-  # make date a date again
-  mutate(open_date = as.Date(open_date, origin = "1970-01-01")) %>%
+  mutate(
+    # make date a date again
+    open_date = as.Date(open_date, origin = "1970-01-01"),
+    # replace NA in LAESTAB where possible
+    laestab = ifelse(is.na(laestab) & !is.na(old_la_code) & !is.na(estab), 
+                     as.numeric(paste0(old_la_code, estab)), 
+                     laestab)
+  ) %>%
   # select columns
   select(time_period,
          urn,  
@@ -308,11 +308,11 @@ df <- spc %>%
              form_7_school_type, form_7_school_type_description, middle_school),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
   ungroup() %>%
+  # filter schools without school level observation data
+  filter(!is.na(laestab)) %>%
   # save the specific columns as CSV
   {data.table::fwrite(select(., time_period, urn, laestab, old_la_code, estab, school, school_postcode), 
                       file.path(dir_data,"data_identifiers.csv")); .} %>%
-  # join with scaffold
-  full_join(x = scaffold, y = ., by = id_cols) %>%
   # sort data
   arrange(urn, time_period) %>%
   as.data.frame()
@@ -341,6 +341,7 @@ if (add_deprivation_data) {
   df <- df %>% 
     full_join(., as.data.frame(depr), by = "school_postcode") %>% as.data.frame()
 }
+
 
 
 # headcount
@@ -563,6 +564,16 @@ df <- merge_timelines_across_columns(data_in = spc,
 
 # remove duplicates
 df <- df[!duplicated(df), ]
+
+# create scaffold to safe data
+urn_list <- unique(df$urn)
+
+scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+                  data.frame(urn = as.numeric(urn_list)))
+
+df <- df %>%
+  # join with scaffold
+  full_join(x = scaffold, y = ., by = id_cols) 
 
 # save file
 df <- df[with(df, order(urn, time_period)),]
