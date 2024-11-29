@@ -123,7 +123,7 @@ tmp <- df[, c(id_cols,
               "estab", "laestab", 
               "school", "school_postcode", "region", "region_code", "urban_rural",
               "old_la_code", "la",
-              "phase_of_education", "school_type", "phase_type_grouping",           
+              "phase_of_education", "school_type", "phase_type_grouping", "type_of_establishment",         
               "sex_of_school_description", "denomination", "admissions_policy", "idaci_decile",
               
               col_tot, "npuptot__sen", "npuptot__cap", "npuptot__sptcensus")]
@@ -139,7 +139,7 @@ out <- tmp[, c(id_cols,
                "estab", "laestab", 
                "school", "school_postcode", "region", "region_code", "urban_rural",
                "old_la_code", "la",
-               "phase_of_education", "school_type", "phase_type_grouping",           
+               "phase_of_education", "school_type", "phase_type_grouping", "type_of_establishment",           
                "sex_of_school_description", "denomination", "admissions_policy", "idaci_decile",
                col_tot)]
 out <- out[!duplicated(out),]
