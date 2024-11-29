@@ -1,5 +1,3 @@
-# download xxxx
-
 # Empty the workspace in the global environment except for this function
 rm(list = ls())
 
