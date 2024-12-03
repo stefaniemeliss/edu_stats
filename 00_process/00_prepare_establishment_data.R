@@ -114,6 +114,10 @@ dt[, religiouscharacter_christian := grepl(pattern, religiouscharacter_name, ign
 dt[, urbanicity := ifelse(grepl("Urban", urbanrural_name), "Urban",
                           ifelse(grepl("Rural", urbanrural_name), "Rural", NA))]
 
+# fix gender
+dt[, sex_students := fifelse(dt[, gender_name] == "Girls" | dt[, gender_name] == "Boys", "Single-sex",
+                             fifelse(dt[, gender_name] == "Mixed", "Co-ed", dt[, gender_name]))]
+
 
 # extract postcodes and process deprivation data #
 
@@ -200,7 +204,7 @@ out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
               closedate, reasonestablishmentclosed_name,
               phaseofeducation_name, statutorylowage, statutoryhighage,
               boarders_name, nurseryprovision_name, officialsixthform_name,
-              gender_name, religiouscharacter_name, religiouscharacter_christian, diocese_name,
+              gender_name, sex_students, religiouscharacter_name, religiouscharacter_christian, diocese_name,
               admissionspolicy_name, urbanrural_name, urbanicity, idaci_decile,
               trustschoolflag_name, trusts_name, links
 )]
