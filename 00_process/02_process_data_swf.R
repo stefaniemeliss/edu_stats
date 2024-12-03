@@ -285,9 +285,12 @@ apply(tmp, 2, function(x) {sum(is.na(x))})
 
 # combine all df #
 
+urn_list <- unique(c(ptrs$urn, pay$urn, abs$urn, vac$urn, swf$urn, tmp$urn))
+
 # create scaffold to safe data
 scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = unique(pay$urn)))
+                  data.frame(urn = urn_list))
+
 
 # process data
 df <- scaffold %>%
@@ -314,6 +317,16 @@ df <- scaffold %>%
     across(pupils_fte:last_col(), \(x) as.numeric(gsub(",", "", x)))) %>%
   # make colnames lower case
   rename_with(., tolower) %>%
+  # group by schools
+  group_by(urn) %>%
+  mutate(
+    # fill missing values: observations to be carried backward
+    across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
+           ~zoo::na.locf(., na.rm = FALSE, fromLast = TRUE)),
+    # fill missing values: observations to be carried forward
+    across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
+           ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
+  ungroup() %>%
   # sort data
   arrange(urn, time_period) %>% as.data.frame()
 
