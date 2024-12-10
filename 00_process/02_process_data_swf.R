@@ -327,6 +327,10 @@ df <- scaffold %>%
     across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
   ungroup() %>%
+  # re-compute ratios
+  mutate(pupil_to_qual_teacher_ratio = pupils_fte / qualified_teachers_fte ,
+         pupil_to_qual_unqual_teacher_ratio = pupils_fte / teachers_fte,
+         pupil_to_adult_ratio = pupils_fte / adults_fte) %>%
   # sort data
   arrange(urn, time_period) %>% as.data.frame()
 
