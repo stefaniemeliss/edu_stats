@@ -203,6 +203,14 @@ df <- merge_timelines_across_columns(data_in = ks4,
                                stem = new_col,
                                data_out = df)
 
+# compute percentile for each year
+
+df <- df %>% 
+  group_by(time_period) %>%
+  mutate(ks2a_perc = percent_rank(get(new_col)) * 100) %>% # make new column
+  ungroup() %>%
+  as.data.frame()
+
 #### Percentage of pupils achieving a pass or above in GCSEs in English and mathematics ####
 
 # This indicates the proportion of pupils who have achieved strong passes in these core subjects.
