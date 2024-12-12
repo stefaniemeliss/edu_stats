@@ -76,6 +76,12 @@ cap <- cap %>%
 spc <- data.table::fread(file.path(dir_data, "data_spc.csv")) # census data collected in January of academic year - Spring census
 sen <- data.table::fread(file.path(dir_data, "data_sen.csv"))
 spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
+ks4 <- data.table::fread(file.path(dir_data, "data_spt_ks4.csv")) 
+
+# add ks2 average percentile data to spt
+
+spt <- merge(spt, ks4[, .(time_period, urn, ks2a_perc)], by = c("time_period", "urn"), all.x = T)
+rm(ks4)
 
 # fix postcode
 spc[, school_postcode := gsub("%20", " ", school_postcode)]
