@@ -479,33 +479,33 @@ df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 # Number of pupils by ethnic group	Includes pupils of compulsory school age and above only
 
 # white British ethnic origin
-new_col <- "numeowb" 
+new_col <- "npupowb" 
 spc[, new_col] <- spc$number_of_pupils_classified_as_white_british_ethnic_origin
 df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 
-new_col <- "pnumeowb" 
+new_col <- "pnpupowb" 
 spc[, new_col] <- spc$perc_of_pupils_classified_as_white_british_ethnic_origin
 df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 
-# new_col_p <- "pnumeowb" 
+# new_col_p <- "pnpupowb" 
 # df[, new_col_p] <- df[, new_col] / df[, "npupcaa__spc"] * 100
 
 # Black ethnic origin
-new_col <- "numeobl" 
+new_col <- "npupobl" 
 tmp <- spc[, grepl("urn|time_period|as_caribbean|as_african|other_black", names(spc))]
 tmp[, new_col] <- rowSums(tmp[, grepl("num", names(tmp))], na.rm = T)
 df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
-# new_col_p <- "pnumeobl" 
+# new_col_p <- "pnpupobl" 
 # df[, new_col_p] <- df[, new_col] / df[, "npupcaa__spc"] * 100
 
 # Asian ethnic origin
-new_col <- "numeoas" 
+new_col <- "npupoas" 
 tmp <- spc[, grepl("urn|time_period|indian|paki|bangl|chin|other_asian", names(spc))]
 tmp[, new_col] <- rowSums(tmp[, grepl("num", names(tmp))], na.rm = T)
 df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
-# new_col_p <- "pnumeoas" 
+# new_col_p <- "pnpupoas" 
 # df[, new_col_p] <- df[, new_col] / df[, "npupcaa__spc"] * 100
 
 # total number of classes taught by one teacher

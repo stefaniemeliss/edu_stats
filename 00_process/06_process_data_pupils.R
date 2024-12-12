@@ -192,8 +192,8 @@ out <- out[!duplicated(out),]
 
 # % of pupils classified as white British ethnic origin
 
-col_n <- "numeowb"
-col_p <- "pnumeowb"
+col_n <- "npupeowb"
+col_p <- "pnpupeowb"
 
 out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
@@ -201,8 +201,8 @@ out <- out[!duplicated(out),]
 
 # % of pupils classified as Black ethnic origin
 
-col_n <- "numeobl"
-col_p <- "pnumeobl"
+col_n <- "npupeobl"
+col_p <- "pnpupeobl"
 
 out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
@@ -210,8 +210,8 @@ out <- out[!duplicated(out),]
 
 # % of pupils classified as Asian ethnic origin
 
-col_n <- "numeoas"
-col_p <- "pnumeoas"
+col_n <- "npupeoas"
+col_p <- "pnpupeoas"
 
 out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
