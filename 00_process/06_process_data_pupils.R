@@ -78,9 +78,9 @@ sen <- data.table::fread(file.path(dir_data, "data_sen.csv"))
 spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
 ks4 <- data.table::fread(file.path(dir_data, "data_spt_ks4.csv")) 
 
-# add ks2 average percentile data to spt
+# add ks2 average percentile and z score data to spt
 
-spt <- merge(spt, ks4[, .(time_period, urn, ks2a_perc)], by = c("time_period", "urn"), all.x = T)
+spt <- merge(spt, ks4[, .(time_period, urn, ks2a_perc, ks2a_zscore)], by = c("time_period", "urn"), all.x = T)
 rm(ks4)
 
 # fix postcode
@@ -398,6 +398,10 @@ col_p <- "pnpupsen"
 out[, col_n] <- out$npupsenelse + out$npupsenelk # fixed above
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
 apply(out, 2, FUN = function(x){sum(is.na(x))})
+
+# percentile ks2 average performance
+
+out <- merge(out, df[, c(id_cols, "ks2a_perc", "ks2a_zscore")], by = id_cols, all = T)
 
 # write file #
 
