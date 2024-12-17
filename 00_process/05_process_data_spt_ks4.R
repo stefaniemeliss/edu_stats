@@ -203,11 +203,16 @@ df <- merge_timelines_across_columns(data_in = ks4,
                                stem = new_col,
                                data_out = df)
 
-# compute percentile for each year
+# compute percentile and z score for each year
 
 df <- df %>% 
   group_by(time_period) %>%
-  mutate(ks2a_perc = percent_rank(get(new_col)) * 100) %>% # make new column
+  mutate(
+    # compute percentile
+    ks2a_perc = percent_rank(get(new_col)) * 100,
+    # compute z score as vector (rather than matrix - returned as default)
+    ks2a_zscore = c(scale(get(new_col), center = T, scale = T))
+    ) %>% 
   ungroup() %>%
   as.data.frame()
 
