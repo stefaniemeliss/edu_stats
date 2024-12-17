@@ -491,8 +491,9 @@ df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 # df[, new_col_p] <- df[, new_col] / df[, "npupcaa__spc"] * 100
 
 # Black ethnic origin
+
 new_col <- "npupeobl" 
-tmp <- spc[, grepl("urn|time_period|as_caribbean|as_african|other_black", names(spc))]
+tmp <- spc[, grepl("urn|time_period|as_black|as_caribbean|as_african|other_black", names(spc))]
 tmp[, new_col] <- rowSums(tmp[, grepl("num", names(tmp))], na.rm = T)
 df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
