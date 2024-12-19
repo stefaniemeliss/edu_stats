@@ -13,7 +13,7 @@ rm(list = ls())
 library(kableExtra)
 library(dplyr)
 
-devtools::source_url("https://github.com/stefaniemeliss/scm_feasibility/blob/main/functions.R?raw=TRUE")
+devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
 
 # define directories
 dir <- getwd()
@@ -64,7 +64,13 @@ for (i in seq_along(start:finish)) {
   
   # read in data
   tmp <- read.csv(file = files[i], fileEncoding="latin1")
+  
+  # fix column names
   names(tmp) <- gsub("X...", "", names(tmp), fixed = T)
+  names(tmp) <- gsub("ï..", "", names(tmp), fixed = T)
+
+  # Replace consecutive full stops with a single underscore
+  names(tmp) <- gsub("\\.+", "_", names(tmp))
   
   # subset data to only include relevant schools
   names(tmp) <- tolower(names(tmp))
@@ -107,7 +113,7 @@ scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
 
 
 # number of pupils
-cols_to_merge <- c("pupils", "total.pupils")
+cols_to_merge <- c("pupils", "total_pupils")
 new_col <- "npuptot__sen"
 
 df <- merge_timelines_across_columns(data_in = sen, 
@@ -120,7 +126,7 @@ df <- merge_timelines_across_columns(data_in = sen,
 # This stage involved the school providing additional or different support to help the child progress. 
 # SEN Code of Practice 2014 replaced the terms "School Action" and "School Action Plus" with "SEN support."
 cols_to_merge <- c("schoolaction", "school_action")
-new_col <- "npupsena" # pupils on roll with SEN on School Action
+new_col <- "npupsensa" # pupils on roll with SEN on School Action
 
 df <- merge_timelines_across_columns(data_in = sen, 
                                      identifier_columns = id_cols, 
@@ -132,7 +138,7 @@ df <- merge_timelines_across_columns(data_in = sen,
 # This stage involved external specialists providing additional advice and support to the school to help meet the child's needs.
 # SEN Code of Practice 2014 replaced the terms "School Action" and "School Action Plus" with "SEN support."
 cols_to_merge <- c("schoolactionplus", "school_action_plus")
-new_col <- "npupsenap" # pupils on roll with school  action plus
+new_col <- "npupsensap" # pupils on roll with school  action plus
 
 df <- merge_timelines_across_columns(data_in = sen, 
                                      identifier_columns = id_cols, 
@@ -149,13 +155,15 @@ df <- merge_timelines_across_columns(data_in = sen,
 # and are receiving additional support, but do not have an Education, Health and Care (EHC) plan or a Statement of SEN.
 
 # combine School Action and School Action Plus (SEN Code of Practice 2001)
-df[, "npupsenelk2001"] <- df$npupsena + df$npupsenap
+# df[, "npupsenelk2001"] <- df$npupsensa + df$npupsensap
+df[, "npupsenelk2001"] <- rowSums(df[, c("npupsensa", "npupsensap")], na.rm = T)
+
 
 # SEN support (SEN Code of Practice 2014)
 # "SEN support" is the current system used in schools to help children with special educational needs 
 # who do not have an Education, Health and Care (EHC) plan. 
 new_col <- "npupsenelk2014"
-sen[, new_col] <- sen$sen.support
+sen[, new_col] <- sen$sen_support
 df <- merge(df, sen[, c(id_cols, new_col)], by = id_cols, all = T)
 
 
@@ -187,7 +195,7 @@ df <- merge_timelines_across_columns(data_in = sen,
 # EHC plans were introduced under the Children and Families Act 2014, replacing the Statements of SEN.
 # statements or EHC plan (transfer of statements to an EHC plan is due to take place by April 2018)
 
-cols_to_merge <- c("statement..ehc.plan", "statement...ehc.plan", "ehc.plan")
+cols_to_merge <- c("statement_ehc_plan", "ehc_plan")
 new_col <- "npupsenehcst" # pupils on roll with EHC plan or statement
 
 df <- merge_timelines_across_columns(data_in = sen, 
@@ -213,7 +221,28 @@ df <- merge_timelines_across_columns(data_in = df,
 
 # pupil SEN status: Plan or intervention
 # SEN provision - EHC plan/Statement of SEN or SEN support/School Action/School Action plus
-df[, "npupsen"] <- df$npupsenelse + df$npupsenelk
+# df[, "npupsen"] <- df$npupsenelse + df$npupsenelk
+df[, "npupsen"] <- rowSums(df[, c("npupsenelse", "npupsenelk")], na.rm = T)
+
+#### sense check data ####
+
+# extract relevant columns
+test <- sen[, c("urn", "time_period", 
+                "schoolactionplus", "school_action_plus",
+                "schoolaction", "school_action",
+                "statements", "statement", 
+                "sen_support",
+                "statement_ehc_plan",
+                "ehc_plan"
+)]
+
+# compute row sums
+test$send <- rowSums(test[, c(-1, -2)], na.rm = T)
+
+# check against output
+test <- merge(df[, c(id_cols, "npupsen")], test[, c(id_cols, "send")], by = id_cols)
+test$diff  <- test$send - test$npupsen
+sum(test$diff != 0)
 
 
 #### save data ####
