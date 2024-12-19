@@ -406,7 +406,7 @@ fix_roundings <- function(var_nrd = "variable_not_rounded", var_rd = "variable_r
   tmp$rd <- round(tmp[, var_nrd] / rounding_factor) * rounding_factor
   
   # replace any instances of rounded values with unrounded values
-  tmp$test <- ifelse(tmp[, col_to_filter] %in% filter, tmp[, var_nrd], tmp[, var_rd])
+  tmp$test <- ifelse(tmp[, var_nrd] != 0 & tmp[, col_to_filter] %in% filter, tmp[, var_nrd], tmp[, var_rd])
   
   # compute diff after replacing rounded values with unrounded values
   tmp$diff2 <- tmp[, var_nrd] - tmp$test
