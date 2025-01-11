@@ -103,9 +103,18 @@ for (i in seq_along(start:finish)) {
 
 
 #### extract relevant data ####
+library(data.table)
+
+# load spt data
+spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
+# select columns
+spt <- spt[,  .SD, .SDcols = grepl("time_period|urn|sen", names(spt))]
+
+# merge with SEND
+sen2 <- merge(sen, spt, by = id_cols, all = T)
 
 # create scaffold to safe data
-urn_list <- unique(sen$urn)
+urn_list <- unique(sen2$urn)
 sum(is.na(urn_list))
 
 scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
@@ -116,7 +125,7 @@ scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
 cols_to_merge <- c("pupils", "total_pupils")
 new_col <- "npuptot__sen"
 
-df <- merge_timelines_across_columns(data_in = sen, 
+df <- merge_timelines_across_columns(data_in = sen2, 
                                      identifier_columns = id_cols, 
                                      column_vector = cols_to_merge,
                                      stem = new_col,
@@ -126,68 +135,90 @@ df <- merge_timelines_across_columns(data_in = sen,
 # This stage involved the school providing additional or different support to help the child progress. 
 # SEN Code of Practice 2014 replaced the terms "School Action" and "School Action Plus" with "SEN support."
 cols_to_merge <- c("schoolaction", "school_action")
-new_col <- "npupsensa" # pupils on roll with SEN on School Action
+new_col <- "npup_school_action" # pupils on roll with SEN on School Action
 
-df <- merge_timelines_across_columns(data_in = sen, 
+tmp <- merge_timelines_across_columns(data_in = sen2, 
                                      identifier_columns = id_cols, 
                                      column_vector = cols_to_merge,
                                      stem = new_col,
-                                     data_out = df)
+                                     data_out = sen2)
+
+# fix roundings
+# data for 2012/13 - 2013/14 reported in SEN is rounded in comparison to numbers reported in SPT
+tmp <- fix_roundings(var_rd = new_col, var_nrd = "tsena",
+                     identifier_columns = id_cols,
+                     col_to_filter = "time_period",
+                     filter = c(201213, 201314),
+                     rounding_factor = 5,
+                     data_in = tmp)
+
+# select rows
+df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
 # School Action Plus (SEN Code of Practice 2001)
 # This stage involved external specialists providing additional advice and support to the school to help meet the child's needs.
 # SEN Code of Practice 2014 replaced the terms "School Action" and "School Action Plus" with "SEN support."
 cols_to_merge <- c("schoolactionplus", "school_action_plus")
-new_col <- "npupsensap" # pupils on roll with school  action plus
+new_col <- "npup_school_action_plus" # pupils on roll with school  action plus
 
-df <- merge_timelines_across_columns(data_in = sen, 
-                                     identifier_columns = id_cols, 
-                                     column_vector = cols_to_merge,
-                                     stem = new_col,
-                                     data_out = df)
+tmp <- merge_timelines_across_columns(data_in = sen2, 
+                                            identifier_columns = id_cols, 
+                                            column_vector = cols_to_merge,
+                                            stem = new_col,
+                                            data_out = sen2)
 
-# SEN support = registered pupils with SEN without a statement or EHC plan
-# combines "SEN support," "School Action," and "School Action Plus"
-# encompasses the various levels and types of support provided to children with special educational needs
-# in SPT: TSENEL*K* stands for "Total number of pupils with Special Educational Needs (SEN) who receive SEN support." 
-# K = SEN support
-# This metric indicates the total count of pupils within a school who have been identified as having special educational needs 
-# and are receiving additional support, but do not have an Education, Health and Care (EHC) plan or a Statement of SEN.
-
-# combine School Action and School Action Plus (SEN Code of Practice 2001)
-# df[, "npupsenelk2001"] <- df$npupsensa + df$npupsensap
-df[, "npupsenelk2001"] <- rowSums(df[, c("npupsensa", "npupsensap")], na.rm = T)
+# fix roundings
+# data for 2012/13 - 2013/14 reported in SEN is rounded in comparison to numbers reported in SPT
+tmp <- fix_roundings(var_rd = new_col, var_nrd = "totsenap",
+                     identifier_columns = id_cols,
+                     col_to_filter = "time_period",
+                     filter = c(201213, 201314),
+                     rounding_factor = 5,
+                     data_in = tmp)
+# combine
+df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
 
 # SEN support (SEN Code of Practice 2014)
 # "SEN support" is the current system used in schools to help children with special educational needs 
 # who do not have an Education, Health and Care (EHC) plan. 
-new_col <- "npupsenelk2014"
-sen[, new_col] <- sen$sen_support
-df <- merge(df, sen[, c(id_cols, new_col)], by = id_cols, all = T)
+new_col <- "npup_sen_support"
+sen2[, new_col] <- sen2[, "sen_support"]
 
+# fix roundings
+# data for 2014/15 - 2016/17 reported in SEN is rounded in comparison to numbers reported in SPT
+tmp <- fix_roundings(var_rd = new_col, var_nrd = "tsenelk",
+                     identifier_columns = id_cols,
+                     col_to_filter = "time_period",
+                     filter = c(201415, 201516, 201617),
+                     rounding_factor = 5,
+                     data_in = sen2)
 
-cols_to_merge <- c("npupsenelk2001", "npupsenelk2014")
-new_col <- "npupsenelk" # eligible pupils on roll with SEN support
-
-df <- merge_timelines_across_columns(data_in = df, 
-                                     identifier_columns = id_cols, 
-                                     column_vector = cols_to_merge,
-                                     stem = new_col,
-                                     data_out = df)
+# combine 
+df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
 # statements of SEN (SEN Code of Practice 2001)
 # A Statement of Special Educational Needs was the previous system used in England to outline the educational needs 
 # and the provision required for children with significant special educational needs.
 cols_to_merge <- c("statements", "statement")
-new_col <- "npupsenst" # pupils on roll with SEN statement
+new_col <- "npup_statement" # pupils on roll with SEN statement
 
-df <- merge_timelines_across_columns(data_in = sen, 
-                                     identifier_columns = id_cols, 
-                                     column_vector = cols_to_merge,
-                                     stem = new_col,
-                                     data_out = df)
+tmp <- merge_timelines_across_columns(data_in = sen2, 
+                                      identifier_columns = id_cols, 
+                                      column_vector = cols_to_merge,
+                                      stem = new_col,
+                                      data_out = sen2)
 
+# fix roundings
+# data for 2012/13 - 2013/14 reported in SEN is rounded in comparison to numbers reported in SPT
+tmp <- fix_roundings(var_rd = new_col, var_nrd = "totsenst",
+                     identifier_columns = id_cols,
+                     col_to_filter = "time_period",
+                     filter = c(201213, 201314),
+                     rounding_factor = 5,
+                     data_in = tmp)
+# combine
+df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
 # EHC plan (SEN Code of Practice 2014)
 # An Education, Health and Care plan is a legal document that describes a child or young person's special educational, health, and social care needs. 
@@ -196,13 +227,25 @@ df <- merge_timelines_across_columns(data_in = sen,
 # statements or EHC plan (transfer of statements to an EHC plan is due to take place by April 2018)
 
 cols_to_merge <- c("statement_ehc_plan", "ehc_plan")
-new_col <- "npupsenehcst" # pupils on roll with EHC plan or statement
+new_col <- "npup_ehcp" # pupils on roll with EHC plan or statement
 
-df <- merge_timelines_across_columns(data_in = sen, 
-                                     identifier_columns = id_cols, 
-                                     column_vector = cols_to_merge,
-                                     stem = new_col,
-                                     data_out = df)
+tmp <- merge_timelines_across_columns(data_in = sen2, 
+                                      identifier_columns = id_cols, 
+                                      column_vector = cols_to_merge,
+                                      stem = new_col,
+                                      data_out = sen2)
+
+# fix roundings
+# data for 2014/15 - 2016/17 reported in SEN is rounded in comparison to numbers reported in SPT
+tmp <- fix_roundings(var_rd = new_col, var_nrd = "tsenelse",
+                     identifier_columns = id_cols,
+                     col_to_filter = "time_period",
+                     filter = c(201415, 201516, 201617),
+                     rounding_factor = 5,
+                     data_in = tmp)
+
+# combine 
+df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
 # "SEND plan" (Special Educational Needs and Disabilities plan) = statements or EHC plan combined
 # in SPT: TSENEL*SE* = Number of SEN pupils with a statement or EHC plan
@@ -222,28 +265,9 @@ df <- merge_timelines_across_columns(data_in = df,
 # pupil SEN status: Plan or intervention
 # SEN provision - EHC plan/Statement of SEN or SEN support/School Action/School Action plus
 # df[, "npupsen"] <- df$npupsenelse + df$npupsenelk
-df[, "npupsen"] <- rowSums(df[, c("npupsenelse", "npupsenelk")], na.rm = T)
-
-#### sense check data ####
-
-# extract relevant columns
-test <- sen[, c("urn", "time_period", 
-                "schoolactionplus", "school_action_plus",
-                "schoolaction", "school_action",
-                "statements", "statement", 
-                "sen_support",
-                "statement_ehc_plan",
-                "ehc_plan"
-)]
-
-# compute row sums
-test$send <- rowSums(test[, c(-1, -2)], na.rm = T)
-
-# check against output
-test <- merge(df[, c(id_cols, "npupsen")], test[, c(id_cols, "send")], by = id_cols)
-test$diff  <- test$send - test$npupsen
-sum(test$diff != 0)
-
+df[, "npupsen"] <- rowSums(df[, c("npup_school_action", "npup_school_action_plus",
+                                  "npup_sen_support",
+                                  "npup_statement", "npup_ehcp")], na.rm = T)
 
 #### save data ####
 df <- df[with(df, order(urn, time_period)),]
@@ -256,12 +280,9 @@ dict$explanation <- c("academic year",
                       "total number of pupils",
                       "number of pupils with SEN on School Action",
                       "number of pupils with SEN on School Action Plus",
-                      "number of pupils with SEN on School Action or School Action Plus (SEN Code of Practice 2001)",
                       "number of pupils with SEN support (SEN Code of Practice 2014)",
-                      "number of pupils with SEN support/School Action/School Action plus (all years)",
                       "number of pupils with SEN statememnt (SEN Code of Practice 2001)",
                       "number of pupils with EHC plan or Statement of SEN (SEN Code of Practice 2014)",
-                      "number of pupils with EHC plan/Statement of SEN (all years)",
                       "number of pupils with SEN provision (EHC plan/Statement of SEN or SEN support/School Action/School Action plus)"
                       )
 # save file
