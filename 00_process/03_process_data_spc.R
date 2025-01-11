@@ -379,8 +379,11 @@ df <- merge_timelines_across_columns(data_in = spc,
                                      stem = new_col,
                                      data_out = df)
 
+names(spc)[grepl("girl", names(spc))]
+
 # number of pupils female
-cols_to_merge <- c("headcount_total_girls", "headcount_total_female")
+cols_to_merge <- c("headcount_total_girls", "headcount_total_female", "headcount_total_girls__rounded_")
+
 new_col <- "npupf"
 
 df <- merge_timelines_across_columns(data_in = spc, 
