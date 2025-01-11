@@ -84,7 +84,7 @@ names(swf) <- tolower(gsub("X...", "", names(swf), fixed = T))
 names(swf)[names(swf) == "school_urn"] <- "urn"
 
 # select columns
-swf <- swf[, grepl("time_period|urn|teach", names(swf))]
+swf <- swf[, grepl("time_period|urn|teach|business|admin", names(swf))]
 swf <- swf[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|leader|head", names(swf))]
 
 # Workforce teacher characteristics - school level #
