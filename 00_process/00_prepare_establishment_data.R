@@ -196,9 +196,31 @@ if (add_deprivation_data) {
 
 }
 
+# add latitude and longitute
+
+add_coord_data = T
+
+if (add_coord_data) {
+  
+  # read in ONS data
+  ons <- data.table::fread(file.path(dir_misc, "ONSPD_NOV_2024", "Data", "ONSPD_NOV_2024_UK.csv"))
+
+  # get school postcodes
+  postcodes <- c(unique(dt[, postcode]))
+  
+  # filter ONS data
+  ons <- ons[pcds %in% postcodes, ]
+  ons[, postcode := pcds]
+  ons <- ons[, .(postcode, lat, long)]
+  
+  # merge 
+  dt <- merge(dt, ons, by = "postcode", all.x = T)
+}
+  
+
 # select columns
 out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
-              street, postcode, town, gor_name,
+              street, postcode, town, gor_name, lat, long,
               typeofestablishment_name, 
               establishmentstatus_name, opendate, reasonestablishmentopened_name,
               closedate, reasonestablishmentclosed_name,
