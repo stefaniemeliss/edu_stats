@@ -263,42 +263,30 @@ tmp <- wtc %>%
     
     # compute aggregates
     hc_age_under_30 = rowSums(select(., "hc_age_Under_25", "hc_age_25_to_29"), na.rm = T),
-    hc_age_perc_under_25 = hc_age_Under_25/hc * 100,
-    hc_age_perc_25_to_29 = hc_age_25_to_29/hc * 100,
-    hc_age_perc_under_30 = hc_age_under_30/hc * 100,
+    hc_perc_age_under_30 = hc_age_under_30/hc * 100,
     fte_age_under_30 = rowSums(select(., "fte_age_Under_25", "fte_age_25_to_29"), na.rm = T),
-    fte_age_perc_under_25 = fte_age_Under_25/fte * 100,
-    fte_age_perc_25_to_29 = fte_age_25_to_29/fte * 100,
     fte_perc_age_under_30 = fte_age_under_30/fte * 100,
     
     hc_age_30_to_49 = rowSums(select(., "hc_age_30_to_39", "hc_age_40_to_49"), na.rm = T),
-    hc_age_perc_30_to_39 = hc_age_30_to_39/hc * 100,
-    hc_age_perc_40_to_49 = hc_age_40_to_49/hc * 100,
-    hc_age_perc_30_to_49 = hc_age_30_to_49/hc * 100,
+    hc_perc_age_30_to_49 = hc_age_30_to_49/hc * 100,
     fte_age_30_to_49 = rowSums(select(., "fte_age_30_to_39", "fte_age_40_to_49"), na.rm = T),
-    fte_perc_age_30_to_39 = fte_age_30_to_39/fte * 100,
-    fte_perc_age_40_to_49 = fte_age_40_to_49/fte * 100,
     fte_perc_age_30_to_49 = fte_age_30_to_49/fte * 100,
     
     hc_age_50_and_over = rowSums(select(., "hc_age_50_to_59", "hc_age_60_and_over"), na.rm = T),
-    hc_age_perc_50_to_59    = hc_age_50_to_59/hc * 100,
-    hc_age_perc_60_and_over = hc_age_60_and_over/hc * 100,
-    hc_age_perc_50_and_over = hc_age_50_and_over/hc * 100,
+    hc_perc_age_50_and_over = hc_age_50_and_over/hc * 100,
     fte_age_50_and_over = rowSums(select(., "fte_age_50_to_59", "fte_age_60_and_over"), na.rm = T),
-    fte_age_perc_50_to_59    = fte_age_50_to_59/fte * 100,
-    fte_age_perc_60_and_over = fte_age_60_and_over/fte * 100,
     fte_perc_age_50_and_over = fte_age_50_and_over/fte * 100,
     
     # estimate average age of teachers at a school
-    hc_age_avg      = (hc_age_Under_25 * 22.5 + hc_age_25_to_29 * 27 + hc_age_30_to_39 * 34.5 + 
+    hc_avg_age      = (hc_age_Under_25 * 22.5 + hc_age_25_to_29 * 27 + hc_age_30_to_39 * 34.5 + 
       hc_age_40_to_49 * 44.5 + hc_age_50_to_59 * 54.5 + hc_age_60_and_over * 62.5)/hc,
-    fte_age_avg     = (fte_age_Under_25 * 22.5 + fte_age_25_to_29 * 27 + fte_age_30_to_39 * 34.5 + 
+    fte_avg_age     = (fte_age_Under_25 * 22.5 + fte_age_25_to_29 * 27 + fte_age_30_to_39 * 34.5 + 
       fte_age_40_to_49 * 44.5 + fte_age_50_to_59 * 54.5 + fte_age_60_and_over * 62.5)/fte
     
   ) %>% #as.data.frame()
   # select(matches("time|urn|Female|White|British|Classroom|hc|fte|age")) %>%
   select(matches("time|urn|Female|White|British|Classroom|age")) %>%
-  select(matches("time_period|urn|fte_perc|age_avg")) %>%
+  select(matches("time_period|urn|fte_perc|avg_age")) %>%
   as.data.frame()
 
 apply(tmp, 2, function(x) {sum(is.na(x))})
