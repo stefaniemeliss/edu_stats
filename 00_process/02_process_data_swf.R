@@ -267,8 +267,8 @@ tmp <- wtc %>%
     hc_age_perc_25_to_29 = hc_age_25_to_29/hc * 100,
     hc_age_perc_under_30 = hc_age_under_30/hc * 100,
     fte_age_under_30 = rowSums(select(., "fte_age_Under_25", "fte_age_25_to_29"), na.rm = T),
-    ftw_age_perc_under_25 = fte_age_Under_25/fte * 100,
-    ftw_age_perc_25_to_29 = fte_age_25_to_29/fte * 100,
+    fte_age_perc_under_25 = fte_age_Under_25/fte * 100,
+    fte_age_perc_25_to_29 = fte_age_25_to_29/fte * 100,
     fte_perc_age_under_30 = fte_age_under_30/fte * 100,
     
     hc_age_30_to_49 = rowSums(select(., "hc_age_30_to_39", "hc_age_40_to_49"), na.rm = T),
