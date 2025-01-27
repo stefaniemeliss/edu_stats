@@ -33,7 +33,7 @@ names(res) <- gsub(" ", "_", names(res), fixed = T)
 
 # select cols
 dt <- res[, .SD, .SDcols = 
-               grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor|linked|v1", names(res))]
+            grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor|linked|v1", names(res))]
 
 # # Subset data
 # dt <- dt[la_code != 0 & # no data from schools that are not affiliated with a LA 
@@ -62,7 +62,7 @@ dt[, (names(dt)[sapply(dt, is.character)]) := lapply(.SD, function(x) { ifelse(x
 
 # data in wide format
 linked <- dt[, .SD, .SDcols = 
-            grepl("urn|laestab|establishmentname|linked|v1", names(dt))]
+               grepl("urn|laestab|establishmentname|linked|v1", names(dt))]
 
 # reformat
 linked[, any := fifelse(linked_establishments == "Does not have links", FALSE, TRUE)]
@@ -161,14 +161,20 @@ process_deprivation_data = F
 
 if(process_deprivation_data){
   
-  # list files
-  file_list <- list.files(path = dir_misc, pattern = "2019-deprivation-by-postcodes_establishments_search", full.names = T)
+  years <- c(2015, 2019)
   
-  # read and row bind csv files
-  depr <- data.table::rbindlist(lapply(file_list, data.table::fread))
-  
-  # file file
-  data.table::fwrite(depr, file.path(dir_misc, "data_deprivation_2019_by_school_postcodes_establishments_search.csv"))
+  for (year in years) {
+    
+    # list files
+    file_list <- list.files(path = dir_misc, pattern = paste0(year, "-deprivation-by-postcodes_establishments_search"), full.names = T)
+    
+    # read and row bind csv files
+    depr <- data.table::rbindlist(lapply(file_list, data.table::fread))
+    
+    # file file
+    data.table::fwrite(depr, file.path(dir_misc, paste0("data_deprivation_", year, "_by_school_postcodes_establishments_search.csv")))
+    
+  }
   
 }
 
@@ -177,23 +183,33 @@ add_deprivation_data = T
 
 if (add_deprivation_data) {
   
-  # read in file
-  depr <- data.table::fread(file.path(dir_misc, "data_deprivation_2019_by_school_postcodes_establishments_search.csv"))
+  years <- c(2015, 2019)
   
-  # Income Deprivation Affecting Children Index (IDACI)
-  # IDACI decile categorises areas into ten groups (deciles) based on the proportion of children living in income-deprived households. 
-  # Each decile represents 10% of areas, with decile 1 being the most deprived and decile 10 being the least deprived.
-  
-  # change col names
-  depr[, postcode := Postcode]
-  depr[, idaci_decile := `IDACI Decile`]
-  
-  # subset data
-  depr <- depr[`Postcode Status` != "**UNMATCHED**", .(postcode, idaci_decile)]
-  
-  # merge with df
-  dt <- merge(dt, depr, by = "postcode")
+  for (year in years) {
+    
+    
+    # read in file
+    depr <- data.table::fread(file.path(dir_misc, paste0("data_deprivation_", year, "_by_school_postcodes_establishments_search.csv")))
+    
+    # Income Deprivation Affecting Children Index (IDACI)
+    # IDACI decile categorises areas into ten groups (deciles) based on the proportion of children living in income-deprived households. 
+    # Each decile represents 10% of areas, with decile 1 being the most deprived and decile 10 being the least deprived.
+    
+    # change col names
+    depr[, postcode := Postcode]
+    depr[, paste0("idaci_decile_", year) := `IDACI Decile`]
+    
+    # subset data
+    depr <- depr[`Postcode Status` != "**UNMATCHED**", ] # remove all rows for which the tool did not find a match
+    
+    select <- c("postcode", paste0("idaci_decile_", year))
+    depr <- depr[, ..select]
 
+    # merge with df
+    dt <- merge(dt, depr, by = "postcode")
+    
+  }
+  
 }
 
 # add latitude and longitute
@@ -204,7 +220,7 @@ if (add_coord_data) {
   
   # read in ONS data
   ons <- data.table::fread(file.path(dir_misc, "ONSPD_NOV_2024", "Data", "ONSPD_NOV_2024_UK.csv"))
-
+  
   # get school postcodes
   postcodes <- c(unique(dt[, postcode]))
   
@@ -216,7 +232,7 @@ if (add_coord_data) {
   # merge 
   dt <- merge(dt, ons, by = "postcode", all.x = T)
 }
-  
+
 
 # select columns
 out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
@@ -227,7 +243,7 @@ out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
               phaseofeducation_name, statutorylowage, statutoryhighage,
               boarders_name, nurseryprovision_name, officialsixthform_name,
               gender_name, sex_students, religiouscharacter_name, religiouscharacter_christian, diocese_name,
-              admissionspolicy_name, urbanrural_name, urbanicity, idaci_decile,
+              admissionspolicy_name, urbanrural_name, urbanicity, idaci_decile_2015, idaci_decile_2019,
               trustschoolflag_name, trusts_name, links
 )]
 
