@@ -57,7 +57,7 @@ if (!dir.exists(dir_out)) {
 
 # determine years of interest
 start <- 2010
-finish <- 2022
+finish <- 2023
 
 for (year in start:finish) {
   
@@ -82,6 +82,8 @@ for (year in start:finish) {
     datasets = c("CENSUS", "GIAS")
   } else if (year == 2021) {
     datasets = c("KS4", "KS5", "PUPILABSENCE", "CENSUS", "GIAS")
+  } else if (year == 2023) {
+    datasets = c("KS2", "KS4prov", "CENSUS", "GIAS")
   } else {
     datasets = c("KS2", "KS4", "KS5", "PUPILABSENCE", "CENSUS", "GIAS")
   }
