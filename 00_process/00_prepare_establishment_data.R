@@ -35,6 +35,9 @@ names(res) <- gsub(" ", "_", names(res), fixed = T)
 dt <- res[, .SD, .SDcols = 
             grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor|linked|v1", names(res))]
 
+dt <- res[, .SD, .SDcols = 
+            grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor|parlia|district|ward|la_name|linked|v1", names(res))]
+
 # # Subset data
 # dt <- dt[la_code != 0 & # no data from schools that are not affiliated with a LA 
 #            !is.na(establishmentnumber) & # or don't have an estab number
@@ -237,7 +240,7 @@ if (add_coord_data) {
 
 # select columns
 out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
-              street, postcode, town, gor_name, lat, long,
+              street, postcode, town, gor_name, la_name, districtadministrative_name, administrativeward_name, parliamentaryconstituency_name, lat, long,
               typeofestablishment_name, 
               establishmentstatus_name, opendate, reasonestablishmentopened_name,
               closedate, reasonestablishmentclosed_name,
