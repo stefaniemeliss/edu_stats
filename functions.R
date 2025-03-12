@@ -188,8 +188,26 @@ download_data_from_url <- function(url){
     `user-agent` = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36'
   )
   
+  # repeatedly attempt the HTTP request until successful
+  repeat {
+    request <- try(httr::GET(url = url, httr::add_headers(.headers=headers)), silent = TRUE)
+    
+    # if an error occurred during the GET request, or if the status is not 200, wait and retry
+    if(inherits(request, "try-error") || httr::status_code(request) != 200) {
+      cat("\nHTTP request failed or returned non-200 status. Retrying in 3 seconds...\n")
+      Sys.sleep(3)
+    } else {
+      break
+    }
+  }
+  
+  # Check if request is valid and status code is 200 (should be true here)
+  if(httr::status_code(request) != 200) {
+    stop("Failed to retrieve data after multiple attempts")
+  }
+  
   # retrieve information from URL 
-  request <- httr::GET(url = url, httr::add_headers(.headers=headers))
+  # request <- httr::GET(url = url, httr::add_headers(.headers=headers))
   # request <- httr::GET(url = url_meta, httr::add_headers(.headers=headers))
   # request <- httr::GET(url = url_data, httr::add_headers(.headers=headers))
   
