@@ -202,7 +202,7 @@ download_data_from_url <- function(url){
       status_code <- httr::status_code(request)
       if (status_code != 200) {
         # Check if the error is likely URL-related (client error)
-        if (status_code >= 400 && status_code < 500) {
+        if (status_code == 404) {
           cat("\nHTTP request failed on attempt", attempt, "with status code", status_code, 
               "indicating a likely issue with the URL. Aborting.\n")
           stop("URL Error: ", status_code)
