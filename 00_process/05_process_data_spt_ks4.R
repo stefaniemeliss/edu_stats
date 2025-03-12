@@ -16,23 +16,23 @@ dir_misc <- file.path(dir, "misc")
 in_dir <- file.path(dir_data, "performance-tables")
 
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:22, 11:23)
+years_list <- paste0(20, 10:23, 11:24)
 ks4_method <- c("standard", "standard", "standard", # (201011 - 201213)
                 "ptq", # (201314) DfE restricted the inclusion of vocational qualifications in performance tables, reducing the number of qualifications that can be considered equivalent to GCSEs.
                 "ptq_ee", "ptq_ee", # (201415 - 201516) DfE changed the policy on early entry to GCSEs, stating that only a student's first attempt at a GCSE would count in the performance tables. 
-                "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse" # (201617 - 202223)
+                "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse", "grades_gcse" # (201617 - 202223)
 )
 timings = data.frame(time_period = as.numeric(years_list),
                      ks4_method = ks4_method,
-                     reform_ptq = c(0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
-                     reform_ee = c(0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1),
-                     reform_gcse = c(0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1))
+                     reform_ptq = c(0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+                     reform_ee = c(0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1),
+                     reform_gcse = c(0, 0, 0, 0, 0, 0, 1, 1, 1, 1, 1, 1, 1, 1))
 
 ##### performance tables #####
 
 # determine years of interest
 start <- 2010
-finish <- 2022
+finish <- 2023
 
 id_cols <- c("time_period", "urn")
 

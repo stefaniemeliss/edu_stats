@@ -20,7 +20,7 @@ dir_misc <- file.path(dir, "misc")
 dir_in <- file.path(dir_data, "performance-tables")
 
 # determine year list (akin to other data sources)
-years_list <- paste0(20, 10:22, 11:23)
+years_list <- paste0(20, 10:23, 11:24)
 
 id_cols <- c("time_period", "urn")
 
@@ -28,12 +28,12 @@ id_cols <- c("time_period", "urn")
 
 # determine years of interest
 start <- 2010
-finish <- 2022
+finish <- 2023
 
 for (year in start:finish) {
   
   # skip covid years
-  if(year == 2019 | year == 2020) next
+  if(year == 2019) next
   
   # determine academic year
   academic_year <- paste0(year,"-", year+1)
