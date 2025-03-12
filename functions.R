@@ -64,7 +64,7 @@ merge_timelines_across_columns <- function(data_in = df_in,
     # merge with data_out
     full_join(x = data_out, y = ., by = identifier_columns) %>%
     as.data.frame()
-
+  
   return(data_out)
   
 }
@@ -193,15 +193,27 @@ download_data_from_url <- function(url){
   # request <- httr::GET(url = url_meta, httr::add_headers(.headers=headers))
   # request <- httr::GET(url = url_data, httr::add_headers(.headers=headers))
   
+  # retrieve header information
+  input <- request$headers$`content-disposition`
+  
   # check for file name information
-  input = request$headers$`content-disposition` # e.g., "attachment; filename=Performancetables_114742.zip; filename*=UTF-8''Performancetables_114742.zip"
-  if (grepl("'", input, perl = T)) {
-    tmp <- sub(".*'", "", input) # remove everything before '
-    tmp <- sub("%2F", "_", tmp)
-  } else { # if (grepl('[^\"]', input, perl = T)) { # [^\"] = \
-    tmp <- sub('[^\"]+\"([^\"]+).*', '\\1', input)
+  if (!is.null(input) && nzchar(input)) { # input exists and is non-empty
+    
+    if (grepl("'", input, perl = TRUE)) {
+      tmp <- sub(".*'", "", input)
+      tmp <- sub("%2F", "_", tmp)
+    } else {
+      tmp <- sub('[^\"]+\"([^\"]+).*', '\\1', input)
+    }
+    tmp <- ifelse(nchar(tmp) > 100, gsub("_20", "", tmp), tmp) # replace if filename is too long
+    
+  } else {
+    
+    # Set a default filename or handle the error appropriately
+    cat("\nWarning: 'content-disposition' header is missing. Using a default filename.\n")
+    tmp <- paste0("download_", url, ".bin")
+    
   }
-  tmp <- ifelse(nchar(tmp) > 100, gsub("_20", "", tmp), tmp) # replace if filename is too long
   
   # check if higher level variable dir_year exists in environment
   if (!exists("dir_year")){
@@ -226,7 +238,7 @@ download_data_from_url <- function(url){
       # if empty, ABORT & print to console
       cat("\nNo information on year available, character is empty\n")
       cat("\nSkipped file", tmp, "\n")
-      next
+      return(NULL)
       
     } else {
       
