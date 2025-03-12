@@ -188,22 +188,38 @@ download_data_from_url <- function(url){
     `user-agent` = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36'
   )
   
-  # repeatedly attempt the HTTP request until successful
-  repeat {
-    request <- try(httr::GET(url = url, httr::add_headers(.headers=headers)), silent = TRUE)
+  
+  max_attempts <- 5
+  successful <- FALSE
+  
+  for (attempt in 1:max_attempts) {
+    request <- try(httr::GET(url = url, httr::add_headers(.headers = headers)), silent = TRUE)
     
-    # if an error occurred during the GET request, or if the status is not 200, wait and retry
-    if(inherits(request, "try-error") || httr::status_code(request) != 200) {
-      cat("\nHTTP request failed or returned non-200 status. Retrying in 3 seconds...\n")
-      Sys.sleep(3)
+    if (inherits(request, "try-error")) {
+      cat("\nHTTP request failed on attempt", attempt, "with an error. Retrying in", 2^(attempt-1), "seconds...\n")
+      Sys.sleep(2^(attempt-1))
     } else {
-      break
+      status_code <- httr::status_code(request)
+      if (status_code != 200) {
+        # Check if the error is likely URL-related (client error)
+        if (status_code >= 400 && status_code < 500) {
+          cat("\nHTTP request failed on attempt", attempt, "with status code", status_code, 
+              "indicating a likely issue with the URL. Aborting.\n")
+          stop("URL Error: ", status_code)
+        } else {
+          cat("\nHTTP request returned status", status_code, "on attempt", attempt, 
+              ". Retrying in", 2^(attempt-1), "seconds...\n")
+          Sys.sleep(2^(attempt-1))
+        }
+      } else {
+        successful <- TRUE
+        break
+      }
     }
   }
   
-  # Check if request is valid and status code is 200 (should be true here)
-  if(httr::status_code(request) != 200) {
-    stop("Failed to retrieve data after multiple attempts")
+  if (!successful) {
+    stop("Failed to retrieve data after ", max_attempts, " attempts.")
   }
   
   # retrieve information from URL 
