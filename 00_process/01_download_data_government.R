@@ -1,3 +1,6 @@
+rm(list=ls())
+gc()
+
 ##### WEB SCRAPING SCRIPT #####
 
 setup_environment <- function() {
@@ -34,20 +37,18 @@ setup_environment <- function() {
   headers <- c(
     `user-agent` = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/102.0.5005.61 Safari/537.36'
   )
-  # Return a list containing headers and directories
-  return(list(headers = headers, dir_data = dir_data, dir_misc = dir_misc))
+
+  # Export headers and directories to the global environment
+  assign("headers", headers, envir = .GlobalEnv)
+  assign("dir_data", dir_data, envir = .GlobalEnv)
+  assign("dir_misc", dir_misc, envir = .GlobalEnv)
 }
 
 
 ##### performance tables #####
 
 # Call the function to run all setups and store returned values
-setup_info <- setup_environment()
-
-# Access headers, dir_data, and dir_misc from the returned list
-headers <- setup_info$headers
-dir_data <- setup_info$dir_data
-dir_misc <- setup_info$dir_misc
+setup_environment()
 
 # determine output directory
 dir_out <- file.path(dir_data, "performance-tables")
@@ -82,8 +83,8 @@ for (year in start:finish) {
     datasets = c("CENSUS", "GIAS")
   } else if (year == 2021) {
     datasets = c("KS4", "KS5", "PUPILABSENCE", "CENSUS", "GIAS")
-  } else if (year == 2023) {
-    datasets = c("KS2", "KS4prov", "CENSUS", "GIAS")
+  # } else if (year == 2023) {
+  #   datasets = c("KS2", "KS4", "CENSUS", "GIAS")
   } else {
     datasets = c("KS2", "KS4", "KS5", "PUPILABSENCE", "CENSUS", "GIAS")
   }
@@ -128,12 +129,7 @@ for (year in start:finish) {
 ##### Schools, pupils and their characteristics ##### 
 
 # run all setups (reset environment)
-setup_info <- setup_environment()
-
-# Access headers, dir_data, and dir_misc from the returned list
-headers <- setup_info$headers
-dir_data <- setup_info$dir_data
-dir_misc <- setup_info$dir_misc
+setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "school-pupils-and-their-characteristics"),
@@ -143,12 +139,7 @@ webscrape_government_data(dir_out =  file.path(dir_data, "school-pupils-and-thei
 ##### School workforce in England ##### 
 
 # run all setups (reset environment)
-setup_info <- setup_environment()
-
-# Access headers, dir_data, and dir_misc from the returned list
-headers <- setup_info$headers
-dir_data <- setup_info$dir_data
-dir_misc <- setup_info$dir_misc
+setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "school-workforce-in-england"),
@@ -158,12 +149,7 @@ webscrape_government_data(dir_out =  file.path(dir_data, "school-workforce-in-en
 ##### School capacity ##### 
 
 # run all setups (reset environment)
-setup_info <- setup_environment()
-
-# Access headers, dir_data, and dir_misc from the returned list
-headers <- setup_info$headers
-dir_data <- setup_info$dir_data
-dir_misc <- setup_info$dir_misc
+setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "school-capacity"),
@@ -173,12 +159,7 @@ webscrape_government_data(dir_out =  file.path(dir_data, "school-capacity"),
 ##### Special educational needs in England ##### 
 
 # run all setups (reset environment)
-setup_info <- setup_environment()
-
-# Access headers, dir_data, and dir_misc from the returned list
-headers <- setup_info$headers
-dir_data <- setup_info$dir_data
-dir_misc <- setup_info$dir_misc
+setup_environment()
 
 # download data
 webscrape_government_data(dir_out =  file.path(dir_data, "special-educational-needs-in-england"),
