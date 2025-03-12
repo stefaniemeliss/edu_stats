@@ -60,6 +60,9 @@ if (!dir.exists(dir_out)) {
 start <- 2010
 finish <- 2023
 
+# Create an empty vector to store failed URLs
+failed_urls <- character()
+
 for (year in start:finish) {
   
   # skip covid year
@@ -83,8 +86,8 @@ for (year in start:finish) {
     datasets = c("CENSUS", "GIAS")
   } else if (year == 2021) {
     datasets = c("KS4", "KS5", "PUPILABSENCE", "CENSUS", "GIAS")
-  # } else if (year == 2023) {
-  #   datasets = c("KS2", "KS4", "CENSUS", "GIAS")
+  } else if (year == 2023) {
+     datasets = c("KS2", "KS4", "KS5", "CENSUS", "GIAS")
   } else {
     datasets = c("KS2", "KS4", "KS5", "PUPILABSENCE", "CENSUS", "GIAS")
   }
@@ -96,8 +99,14 @@ for (year in start:finish) {
     
     # specify URL
     url_data <- paste0("https://www.compare-school-performance.service.gov.uk/download-data?download=true&regions=0&filters=", datasets[d], "&fileformat=csv&year=", academic_year,"&meta=false")
-    # download data
-    download_data_from_url(url = url_data)
+    
+    # Try downloading data URL
+    tryCatch({
+      download_data_from_url(url = url_data)
+    }, error = function(e) {
+      cat("Failed to download URL:", url_data, "\nError message:", e$message, "\n")
+      failed_urls <<- c(failed_urls, url_data)
+    })
     
     # get meta data #
     
@@ -106,8 +115,14 @@ for (year in start:finish) {
     if (year == 2014 & datasets[d] == "PUPILABSENCE") {
       url_meta <- paste0("https://www.compare-school-performance.service.gov.uk/download-data?download=true&regions=GUIDANCE&filters=meta&fileformat=zip&year=", academic_year,"&meta=true")
     }
-    # download data
-    download_data_from_url(url = url_meta)
+    
+    # Try downloading meta URL
+    tryCatch({
+      download_data_from_url(url = url_meta)
+    }, error = function(e) {
+      cat("Failed to download URL:", url_meta, "\nError message:", e$message, "\n")
+      failed_urls <<- c(failed_urls, url_meta)
+    })
     
     if (year == 2014 & datasets[d] == "PUPILABSENCE") {
       # move guidance data in separate folder, currently saved in dir_out
@@ -123,6 +138,14 @@ for (year in start:finish) {
   }
   # remove variable from environment
   rm(dir_year)
+}
+
+# After the loop, check if any URLs failed to download
+if (length(failed_urls) > 0) {
+  cat("\nThe following URLs failed to download:\n")
+  print(failed_urls)
+} else {
+  cat("\nAll URLs downloaded successfully.\n")
 }
 
 
