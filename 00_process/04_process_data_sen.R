@@ -253,7 +253,7 @@ df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 # E = Education, Health and Care (EHC) plan
 # This metric indicates the total count of pupils within a school who have significant special educational needs 
 # that require a formal plan or statement to ensure they receive the appropriate support and resources.
-cols_to_merge <- c("npupsenst", "npupsenehcst")
+cols_to_merge <- c("npup_statement", "npup_ehcp")
 new_col <- "npupsenelse" # pupils on roll with SEN statement or EHC plan
 
 df <- merge_timelines_across_columns(data_in = df, 
@@ -281,7 +281,8 @@ dict$explanation <- c("academic year",
                       "number of pupils with SEN on School Action",
                       "number of pupils with SEN on School Action Plus",
                       "number of pupils with SEN support (SEN Code of Practice 2014)",
-                      "number of pupils with SEN statememnt (SEN Code of Practice 2001)",
+                      "number of pupils with SEN statement (SEN Code of Practice 2001)",
+                      "number of pupils with EHC plan or Statement of SEN (SEN Code of Practice 2014)",
                       "number of pupils with EHC plan or Statement of SEN (SEN Code of Practice 2014)",
                       "number of pupils with SEN provision (EHC plan/Statement of SEN or SEN support/School Action/School Action plus)"
                       )
