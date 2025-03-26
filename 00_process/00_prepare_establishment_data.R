@@ -45,6 +45,10 @@ dt <- res[, .SD, .SDcols =
 #            !grepl("Welsh|Further education|Miscellaneous|Higher education institutions|Online provider", typeofestablishment_name) & # only schools
 #            !grepl("Wales|Not Applicable", gor_name)] # or Wales
 
+# concatenate info on linked establishments
+start <- which(names(dt) == "linked_establishments")
+dt[, links := do.call(paste, c(.SD, sep = " ")), .SDcols = start:ncol(dt)]
+
 # Ensure laestab_number has leading zeros and concatenate with dfe_number
 dt[, establishmentnumber := sprintf("%04d", establishmentnumber)]
 dt[, laestab := as.numeric(paste0(la_code, establishmentnumber))]
@@ -55,8 +59,6 @@ dt[, opendate := as.Date(opendate, format = "%d-%m-%Y")]
 dt[, closedate := ifelse(closedate == "", NA_character_, closedate)]
 dt[, closedate := as.Date(closedate, format = "%d-%m-%Y")]
 
-# concatenate info on linked establishments
-dt[, links := do.call(paste, c(.SD, sep = " ")), .SDcols = 31:42]
 
 # make all empty cells NA_character_
 dt[, (names(dt)[sapply(dt, is.character)]) := lapply(.SD, function(x) { ifelse(x == "", NA_character_, x)}), .SDcols = sapply(dt, is.character)]
