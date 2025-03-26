@@ -21,32 +21,37 @@ dir_in <- file.path(dir_data, "school-workforce-in-england")
 
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:23, 11:24)
+lookup <- data.frame(time_period = as.numeric(years_list),
+                     academic_year = as.numeric(substr(years_list, 1, 4)))
 id_cols <- c("time_period", "urn")
 id_cols <- c("time_period", "urn", "laestab")
+id_cols <- c("time_period", "laestab")
+
 
 # Pupil to teacher ratios - school level #
 
 # read in data
-ptrs <- read.csv(file.path(dir_in, "2023", "data", "workforce_ptrs_2010_2023_sch.csv"))
+ptr <- read.csv(file.path(dir_in, "2023", "data", "workforce_ptrs_2010_2023_sch.csv"))
 
-ptrs <- ptrs %>%
+ptr <- ptr %>%
   # rename columns 
   rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
-  rename(urn = school_urn, laestab = school_laestab) %>%
+  rename(urn_ptr = school_urn, laestab = school_laestab) %>%
   rename_with(., ~gsub("_name", "", .)) %>%
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>%
   as.data.frame()
 
-# # select columns
-# ptrs <- ptrs[, grepl("time_period|urn|laestab|fte|ratio", names(ptrs))]
+# select columns
+ptr <- ptr[, grepl("time_period|urn|laestab|fte|ratio|school|la|region|type", names(ptr))]
+ptr <- ptr[, !grepl("code|number", names(ptr))]
 
 # Teacher absences - school level #
 
 # read in data
 abs <- read.csv(file.path(dir_in, "2023", "data", "sickness_absence_teachers_sch.csv"))
 names(abs) <- tolower(gsub("X...", "", names(abs), fixed = T))
-names(abs)[names(abs) == "school_urn"] <- "urn"
+names(abs)[names(abs) == "school_urn"] <- "urn_abs"
 names(abs)[names(abs) == "school_laestab"] <- "laestab"
 
 # select columns
@@ -60,7 +65,7 @@ abs <- abs[!duplicated(abs), ]
 # read in data
 pay <- read.csv(file.path(dir_in, "2023", "data", "workforce_teacher_pay_2010_2023_school.csv"))
 names(pay) <- tolower(gsub("X...", "", names(pay), fixed = T))
-names(pay)[names(pay) == "school_urn"] <- "urn"
+names(pay)[names(pay) == "school_urn"] <- "urn_pay"
 names(pay)[names(pay) == "school_laestab"] <- "laestab"
 
 # select columns
@@ -74,7 +79,7 @@ pay <- pay[!duplicated(pay), ]
 # read in data
 vac <- read.csv(file.path(dir_in, "2023", "data", "vacancies_number_rate_sch_2010_2023.csv"))
 names(vac) <- tolower(gsub("X...", "", names(vac), fixed = T))
-names(vac)[names(vac) == "school_urn"] <- "urn"
+names(vac)[names(vac) == "school_urn"] <- "urn_vac"
 names(vac)[names(vac) == "school_laestab"] <- "laestab"
 
 # select columns
@@ -85,7 +90,7 @@ vac <- vac[, grepl("time_period|urn|laestab|vac|rate|tmp", names(vac))]
 # read in data
 swf <- read.csv(file.path(dir_in, "2023", "data", "workforce_2010_2023_fte_hc_nat_reg_la_sch.csv"))
 names(swf) <- tolower(gsub("X...", "", names(swf), fixed = T))
-names(swf)[names(swf) == "school_urn"] <- "urn"
+names(swf)[names(swf) == "school_urn"] <- "urn_swf"
 names(swf)[names(swf) == "school_laestab"] <- "laestab"
 
 # select columns
@@ -117,7 +122,7 @@ files <- list.files(path = dir_tmp, full.names = T)
 files <- files[!grepl("meta", files)]
 
 # determine cols to keep
-cols_to_keep <- c(id_cols,
+cols_to_keep <- c(id_cols, "urn_wtc",
                   "gender", "age_group", "ethnicity_major",
                   "grade", "working_pattern", "qts_status", "on_route",
                   "full_time_equivalent", "headcount", "fte_school_percent", "headcount_school_percent")
@@ -129,7 +134,7 @@ for (f in 1:length(files)) {
   names(tmp) <- tolower(gsub("X...", "", names(tmp), fixed = T))
   
   # subset data to only include relevant schools
-  names(tmp)[names(tmp) == "school_urn"] <- "urn"
+  names(tmp)[names(tmp) == "school_urn"] <- "urn_wtc"
   names(tmp)[names(tmp) == "school_laestab"] <- "laestab"
   # tmp <- tmp %>% filter(urn %in% urn_list)
   
@@ -138,20 +143,20 @@ for (f in 1:length(files)) {
   
   # combine across years
   if (f == 1) {
-    wtc <- tmp
+    teach_char <- tmp
   } else {
-    wtc <- rbind.all.columns(wtc, tmp)
+    teach_char <- rbind.all.columns(teach_char, tmp)
   }
   
 }
 
 # rename columns
-names(wtc) <- gsub("headcount", "hc", names(wtc))
-names(wtc) <- gsub("school_percent", "perc", names(wtc))
-names(wtc) <- gsub("full_time_equivalent", "fte", names(wtc))
+names(teach_char) <- gsub("headcount", "hc", names(teach_char))
+names(teach_char) <- gsub("school_percent", "perc", names(teach_char))
+names(teach_char) <- gsub("full_time_equivalent", "fte", names(teach_char))
 
 # replace values 
-wtc<- wtc %>%
+teach_char <- teach_char %>%
   mutate(across(matches("fte|hc"), ~na_if(., "x"))) %>% # x = not available - information has not been collected or there are no estimates available at this level of aggregation.
   mutate(across(matches("fte|hc"), ~na_if(., "z"))) %>% # z = not applicable - statistic cannot be produced. For example where a denominator is not available to produce a percentage.
   mutate(across(matches("fte|hc"), ~na_if(., "c"))) %>% # c = confidential - where presentation of data would disclose confidential information
@@ -166,62 +171,64 @@ wtc<- wtc %>%
 values <- c("hc", "fte", "hc_perc", "fte_perc")
 # values <- c("hc")
 
+cols <- c(id_cols, "urn_wtc")
+
 # make into wide format
-tmp <- wtc %>% 
+wtc <- teach_char %>% 
   # TOTALS
   filter_at(vars(!matches("time|urn|laestab|fte|hc")), all_vars(. == "Total")) %>%
-  select(all_of(c(id_cols, "hc", "fte"))) %>%
+  select(all_of(c(cols, "hc", "fte"))) %>%
   right_join( # GENDER
-    wtc %>%
+    teach_char %>%
       # filter(gender != "Total", gender != "Gender_Unclassified") %>%
       filter(gender != "Total") %>%
-      tidyr::pivot_wider(id_cols = {id_cols},
+      tidyr::pivot_wider(id_cols = {cols},
                          names_from = gender,
                          names_glue = "{.value}_gender_{gender}",
                          values_from = {values}),
-    by = id_cols) %>%
+    by = cols) %>%
   right_join( # AGE
-    wtc %>% 
+    teach_char %>% 
       # filter(age_group != "Total", age_group != "Age_unclassified") %>%
       filter(age_group != "Total") %>%
-      tidyr::pivot_wider(id_cols = {id_cols},
+      tidyr::pivot_wider(id_cols = {cols},
                          names_from = age_group,
                          names_glue = "{.value}_age_{age_group}",
                          values_from = {values}),
-    by = id_cols) %>%
+    by = cols) %>%
   right_join( # ETHNICITY
-    wtc %>% 
+    teach_char %>% 
       # filter(ethnicity_major != "Total", ethnicity_major != "Information_not_yet_obtained", ethnicity_major != "Refused") %>%
       filter(ethnicity_major != "Total") %>%
-      tidyr::pivot_wider(id_cols = {id_cols},
+      tidyr::pivot_wider(id_cols = {cols},
                          names_from = ethnicity_major,
                          names_glue = "{.value}_ethnicity_{ethnicity_major}",
                          values_from = {values}),
-    by = id_cols) %>%
+    by = cols) %>%
   right_join( # GRADE
-    wtc %>% 
+    teach_char %>% 
       filter(grade != "Total") %>%
-      tidyr::pivot_wider(id_cols = {id_cols},
+      tidyr::pivot_wider(id_cols = {cols},
                          names_from = grade,
                          names_glue = "{.value}_grade_{grade}",
                          values_from = {values}),
-    by = id_cols) %>%
+    by = cols) %>%
   right_join( # WORKING PATTERN
-    wtc %>% 
+    teach_char %>% 
       filter(working_pattern != "Total") %>%
-      tidyr::pivot_wider(id_cols = {id_cols},
+      tidyr::pivot_wider(id_cols = {cols},
                          names_from = working_pattern,
                          names_glue = "{.value}_pattern_{working_pattern}",
                          values_from = {values}),
-    by = id_cols) %>%
+    by = cols) %>%
   right_join( # QTS STATUS
-    wtc %>% 
+    teach_char %>% 
       filter(qts_status != "Total") %>%
-      tidyr::pivot_wider(id_cols = {id_cols},
+      tidyr::pivot_wider(id_cols = {cols},
                          names_from = qts_status,
                          names_glue = "{.value}_qts_{qts_status}",
                          values_from = {values}),
-    by = id_cols) %>% 
+    by = cols) %>% 
   mutate(
     # fill gaps in total data
     tmp = rowSums(across(matches("hc_grade")), na.rm = T),
@@ -285,9 +292,9 @@ tmp <- wtc %>%
     
     # estimate average age of teachers at a school
     hc_avg_age      = (hc_age_Under_25 * 22.5 + hc_age_25_to_29 * 27 + hc_age_30_to_39 * 34.5 + 
-      hc_age_40_to_49 * 44.5 + hc_age_50_to_59 * 54.5 + hc_age_60_and_over * 62.5)/hc,
+                         hc_age_40_to_49 * 44.5 + hc_age_50_to_59 * 54.5 + hc_age_60_and_over * 62.5)/hc,
     fte_avg_age     = (fte_age_Under_25 * 22.5 + fte_age_25_to_29 * 27 + fte_age_30_to_39 * 34.5 + 
-      fte_age_40_to_49 * 44.5 + fte_age_50_to_59 * 54.5 + fte_age_60_and_over * 62.5)/fte
+                         fte_age_40_to_49 * 44.5 + fte_age_50_to_59 * 54.5 + fte_age_60_and_over * 62.5)/fte
     
   ) %>% #as.data.frame()
   # select(matches("time|urn|laestab|Female|White|British|Classroom|hc|fte|age")) %>%
@@ -295,35 +302,94 @@ tmp <- wtc %>%
   select(matches("time_period|urn|laestab|fte_perc|avg_age")) %>%
   as.data.frame()
 
-apply(tmp, 2, function(x) {sum(is.na(x))})
+apply(wtc, 2, function(x) {sum(is.na(x))})
 
-# tmpp <- tmp[, grepl("time_p|urn|laestab|fte", names(tmp))]
-# tmpp <- tmpp[, !grepl("gender|ethn|perc|grade|pattern|qts", names(tmpp))]
-# head(tmpp)
 
-# combine all df #
+get_urns <- F
+# GET URN NUMBERS #
+if (get_urns) {
+  
+  # Step 1: Initial Input
+  
+  # get school identifiers from all dfs
+  urn_list <- unique(c(ptr$urn_ptr, pay$urn_pay, abs$urn_abs, vac$urn_vac, swf$urn_swf, wtc$urn_wtc))
+  laestab_list <- unique(c(ptr$laestab, pay$laestab, abs$laestab, vac$laestab, swf$laestab, wtc$laestab))
+  
+  # read in data
+  est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
+  
+  # select relevant laestab only and relevant columns
+  est <- est[est$laestab %in% laestab_list | est$urn %in% urn_list, c("laestab", "urn", "opendate", "closedate")]
 
-urn_list <- unique(c(ptrs$urn, pay$urn, abs$urn, vac$urn, swf$urn, tmp$urn))
-laestab_list <- unique(c(ptrs$laestab, pay$laestab, abs$laestab, vac$laestab, swf$laestab, tmp$laestab))
+  # define academic years
+  academic_years <- lookup$academic_year
+  
+  # Step 2a: Identify Schools with Single Entries
+  
+  laestab_s <- est %>%
+    group_by(laestab) %>%
+    summarise(n = n()) %>%
+    filter(n == 1) %>%
+    pull(laestab)
+  
+  # Step 2b: Identify Schools with Multiple Entries
+  
+  laestab_m <- est %>%
+    group_by(laestab) %>%
+    summarise(n = n()) %>%
+    filter(n > 1) %>%
+    pull(laestab)
+  
+  # Step 4: process schools with single entry
+  
+  scaffold <- merge(data.frame(time_period = academic_years),
+                    data.frame(laestab = laestab_s))
+  urn_s <- est %>%
+    filter(laestab %in% laestab_s) %>%
+    select(-c(opendate, closedate)) %>%
+    full_join(scaffold, ., by = "laestab") %>% 
+    as.data.frame()
+  
+  # Step 5: process schools with multiple entries
+  urn_m <- create_urn_df(est[est$laestab %in% laestab_m, ], 2010, 2023)
+  
+  # combine schools with single and multiple entries
+  urn <- rbind(urn_s, urn_m)
+  
+  # fix time_period
+  urn$time_period <- plyr::mapvalues(urn$time_period, lookup$academic_year, lookup$time_period, warn_missing = TRUE)
+  
+  # save urns
+  data.table::fwrite(urn, file = file.path(dir_misc, "data_swf_urn.csv"), row.names = F)
+  
+} else {
+  
+  # read in urn data
+  urn <- read.csv(file = file.path(dir_misc, "data_swf_urn.csv"))
+}
+
+# COMBINE ALL DFs #
+
+# get school identifiers from all dfs
+urn_list <- unique(urn$urn)
+laestab_list <- unique(urn$laestab)
 
 # create scaffold to safe data
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+scaffold <- merge(data.frame(time_period = as.integer(years_list)),
                   # data.frame(urn = urn_list))
                   data.frame(laestab = laestab_list))
 
-id_cols <- names(scaffold)
-id_cols <- c("time_period", "urn", "laestab")
-
 # process data
 df <- scaffold %>%
+  # merge with urn info
+  full_join(., urn, by = id_cols) %>%
   # merge all dfs
-  # full_join(., ptrs, by = id_cols) %>%
-  full_join(., ptrs, by = names(scaffold)) %>%
-  full_join(., pay, by = id_cols) %>% 
-  full_join(., abs, by = id_cols) %>%
-  full_join(., vac, by = id_cols) %>%
-  full_join(., swf, by = id_cols) %>%
-  full_join(., tmp, by = id_cols) %>%
+  left_join(., ptr, by = id_cols) %>%
+  left_join(., pay, by = id_cols) %>% 
+  left_join(., abs, by = id_cols) %>%
+  left_join(., vac, by = id_cols) %>%
+  left_join(., swf, by = id_cols) %>%
+  left_join(., wtc, by = id_cols) %>%
   # replace with NAs
   mutate(
     # replace spaces and %
@@ -346,11 +412,11 @@ df <- scaffold %>%
   mutate(
     # fill missing values: observations to be carried backward
     # across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
-    across(c(region_code, region, old_la_code, new_la_code, la, urn, school, school_type),
+    across(c(region, la, school, school_type),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = TRUE)),
     # fill missing values: observations to be carried forward
     # across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
-    across(c(region_code, region, old_la_code, new_la_code, la, urn, school, school_type),
+    across(c(region, la, school, school_type),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
   ungroup() %>%
   # re-compute ratios
