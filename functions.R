@@ -468,3 +468,45 @@ fix_roundings <- function(var_nrd = "variable_not_rounded", var_rd = "variable_r
   return(tmp)
 }
 
+# Function to determine the URN of an establishment in a given academic year
+get_urn <- function(data, laestab, academic_year_start) {
+  # Define the start and end dates of the academic year
+  academic_start <- as.Date(paste0(academic_year_start, "-09-01"))
+  academic_end <- as.Date(paste0(academic_year_start + 1, "-08-31"))
+  
+  # Filter the data for the given establishment
+  est_data <- data[data$laestab == laestab, ]
+  
+  # Check each row for the URN during the academic year
+  for (i in 1:nrow(est_data)) {
+    row <- est_data[i, ]
+    open_date <- as.Date(row$opendate, format = "%Y-%m-%d")
+    close_date <- as.Date(row$closedate, format = "%Y-%m-%d")
+    
+    if ((is.na(open_date) || open_date <= academic_end) && (is.na(close_date) || close_date >= academic_start)) {
+      return(row$urn)
+    }
+  }
+  
+  return(NA)
+}
+
+# Create a new data frame to store the URN of each establishment for each academic year
+create_urn_df <- function(data, start_year, end_year) {
+  # Get a unique list of establishments
+  establishments <- unique(data$laestab)
+  
+  # Create an empty data frame to store the results
+  status_df <- data.frame(laestab = integer(), urn = integer(), academic_year = integer(), stringsAsFactors = FALSE)
+  
+  # Loop through each academic year and each establishment
+  for (year in start_year:end_year) {
+    for (est in establishments) {
+      school_urn <- get_urn(data, est, year)
+      status_df <- rbind(status_df, data.frame(time_period = year, laestab = est, urn = school_urn, stringsAsFactors = FALSE))
+    }
+  }
+  
+  return(status_df)
+}
+
