@@ -22,6 +22,7 @@ dir_in <- file.path(dir_data, "school-workforce-in-england")
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:23, 11:24)
 id_cols <- c("time_period", "urn")
+id_cols <- c("time_period", "urn", "laestab")
 
 # Pupil to teacher ratios - school level #
 
@@ -38,7 +39,7 @@ ptrs <- ptrs %>%
   as.data.frame()
 
 # # select columns
-# ptrs <- ptrs[, grepl("time_period|urn|fte|ratio", names(ptrs))]
+# ptrs <- ptrs[, grepl("time_period|urn|laestab|fte|ratio", names(ptrs))]
 
 # Teacher absences - school level #
 
@@ -46,9 +47,10 @@ ptrs <- ptrs %>%
 abs <- read.csv(file.path(dir_in, "2023", "data", "sickness_absence_teachers_sch.csv"))
 names(abs) <- tolower(gsub("X...", "", names(abs), fixed = T))
 names(abs)[names(abs) == "school_urn"] <- "urn"
+names(abs)[names(abs) == "school_laestab"] <- "laestab"
 
 # select columns
-abs <- abs[, grepl("time_period|urn|abs|day", names(abs))]
+abs <- abs[, grepl("time_period|urn|laestab|abs|day", names(abs))]
 
 # remove duplicated rows
 abs <- abs[!duplicated(abs), ]
@@ -59,9 +61,10 @@ abs <- abs[!duplicated(abs), ]
 pay <- read.csv(file.path(dir_in, "2023", "data", "workforce_teacher_pay_2010_2023_school.csv"))
 names(pay) <- tolower(gsub("X...", "", names(pay), fixed = T))
 names(pay)[names(pay) == "school_urn"] <- "urn"
+names(pay)[names(pay) == "school_laestab"] <- "laestab"
 
 # select columns
-pay <- pay[, grepl("time_period|urn|mean|headcount|pay", names(pay))]
+pay <- pay[, grepl("time_period|urn|laestab|mean|headcount|pay", names(pay))]
 
 # remove duplicated rows
 pay <- pay[!duplicated(pay), ]
@@ -72,9 +75,10 @@ pay <- pay[!duplicated(pay), ]
 vac <- read.csv(file.path(dir_in, "2023", "data", "vacancies_number_rate_sch_2010_2023.csv"))
 names(vac) <- tolower(gsub("X...", "", names(vac), fixed = T))
 names(vac)[names(vac) == "school_urn"] <- "urn"
+names(vac)[names(vac) == "school_laestab"] <- "laestab"
 
 # select columns
-vac <- vac[, grepl("time_period|urn|vac|rate|tmp", names(vac))]
+vac <- vac[, grepl("time_period|urn|laestab|vac|rate|tmp", names(vac))]
 
 # Size of the school workforce - school level #
 
@@ -82,9 +86,10 @@ vac <- vac[, grepl("time_period|urn|vac|rate|tmp", names(vac))]
 swf <- read.csv(file.path(dir_in, "2023", "data", "workforce_2010_2023_fte_hc_nat_reg_la_sch.csv"))
 names(swf) <- tolower(gsub("X...", "", names(swf), fixed = T))
 names(swf)[names(swf) == "school_urn"] <- "urn"
+names(swf)[names(swf) == "school_laestab"] <- "laestab"
 
 # select columns
-swf <- swf[, grepl("time_period|urn|teach|business|admin", names(swf))]
+swf <- swf[, grepl("time_period|urn|laestab|teach|business|admin", names(swf))]
 swf <- swf[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|leader|head", names(swf))]
 
 # Workforce teacher characteristics - school level #
@@ -125,6 +130,7 @@ for (f in 1:length(files)) {
   
   # subset data to only include relevant schools
   names(tmp)[names(tmp) == "school_urn"] <- "urn"
+  names(tmp)[names(tmp) == "school_laestab"] <- "laestab"
   # tmp <- tmp %>% filter(urn %in% urn_list)
   
   # select relevant columns
@@ -163,7 +169,7 @@ values <- c("hc", "fte", "hc_perc", "fte_perc")
 # make into wide format
 tmp <- wtc %>% 
   # TOTALS
-  filter_at(vars(!matches("time|urn|fte|hc")), all_vars(. == "Total")) %>%
+  filter_at(vars(!matches("time|urn|laestab|fte|hc")), all_vars(. == "Total")) %>%
   select(all_of(c(id_cols, "hc", "fte"))) %>%
   right_join( # GENDER
     wtc %>%
@@ -284,30 +290,35 @@ tmp <- wtc %>%
       fte_age_40_to_49 * 44.5 + fte_age_50_to_59 * 54.5 + fte_age_60_and_over * 62.5)/fte
     
   ) %>% #as.data.frame()
-  # select(matches("time|urn|Female|White|British|Classroom|hc|fte|age")) %>%
-  select(matches("time|urn|Female|White|British|Classroom|age")) %>%
-  select(matches("time_period|urn|fte_perc|avg_age")) %>%
+  # select(matches("time|urn|laestab|Female|White|British|Classroom|hc|fte|age")) %>%
+  select(matches("time|urn|laestab|Female|White|British|Classroom|age")) %>%
+  select(matches("time_period|urn|laestab|fte_perc|avg_age")) %>%
   as.data.frame()
 
 apply(tmp, 2, function(x) {sum(is.na(x))})
 
-# tmpp <- tmp[, grepl("time_p|urn|fte", names(tmp))]
+# tmpp <- tmp[, grepl("time_p|urn|laestab|fte", names(tmp))]
 # tmpp <- tmpp[, !grepl("gender|ethn|perc|grade|pattern|qts", names(tmpp))]
 # head(tmpp)
 
 # combine all df #
 
 urn_list <- unique(c(ptrs$urn, pay$urn, abs$urn, vac$urn, swf$urn, tmp$urn))
+laestab_list <- unique(c(ptrs$laestab, pay$laestab, abs$laestab, vac$laestab, swf$laestab, tmp$laestab))
 
 # create scaffold to safe data
 scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = urn_list))
+                  # data.frame(urn = urn_list))
+                  data.frame(laestab = laestab_list))
 
+id_cols <- names(scaffold)
+id_cols <- c("time_period", "urn", "laestab")
 
 # process data
 df <- scaffold %>%
   # merge all dfs
-  full_join(., ptrs, by = id_cols) %>%
+  # full_join(., ptrs, by = id_cols) %>%
+  full_join(., ptrs, by = names(scaffold)) %>%
   full_join(., pay, by = id_cols) %>% 
   full_join(., abs, by = id_cols) %>%
   full_join(., vac, by = id_cols) %>%
@@ -330,13 +341,16 @@ df <- scaffold %>%
   # make colnames lower case
   rename_with(., tolower) %>%
   # group by schools
-  group_by(urn) %>%
+  # group_by(urn) %>%
+  group_by(laestab) %>%
   mutate(
     # fill missing values: observations to be carried backward
-    across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
+    # across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
+    across(c(region_code, region, old_la_code, new_la_code, la, urn, school, school_type),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = TRUE)),
     # fill missing values: observations to be carried forward
-    across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
+    # across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
+    across(c(region_code, region, old_la_code, new_la_code, la, urn, school, school_type),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
   ungroup() %>%
   # re-compute ratios
@@ -344,7 +358,8 @@ df <- scaffold %>%
          pupil_to_qual_unqual_teacher_ratio = pupils_fte / teachers_fte,
          pupil_to_adult_ratio = pupils_fte / adults_fte) %>%
   # sort data
-  arrange(urn, time_period) %>% as.data.frame()
+  # arrange(urn, time_period) %>% as.data.frame()
+  arrange(laestab, time_period) %>% as.data.frame()
 
 # save data
 #df <- df[with(df, order(urn, time_period)),]
