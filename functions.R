@@ -510,3 +510,51 @@ create_urn_df <- function(data, start_year, end_year) {
   return(status_df)
 }
 
+# Function to get schools for a given MAT UID
+get_schools_for_mat <- function(mat_uid) {
+  url <- paste0("https://www.get-information-schools.service.gov.uk/Groups/Group/Details/", mat_uid, "#list")
+  page <- read_html(url)
+  
+  mat_name <- page %>%
+    html_node("#establishment-group-name") %>%  # Assuming the MAT name is in a span with id "establishment-group-name"
+    html_text() %>%
+    trimws()
+  
+  school_names <- page %>%
+    html_nodes("h2.govuk-heading-s a") %>%
+    html_text()
+  
+  school_urns <- page %>%
+    html_nodes("dd#establishment-urn-value") %>%
+    html_text()
+  
+  school_laestabs <- page %>%
+    html_nodes("dd#establishment-laestab-value") %>%
+    html_text()
+  
+  school_statuses <- page %>%
+    html_nodes("dd#establishment-status-value") %>%
+    html_text()
+  
+  school_joined_dates <- page %>%
+    html_nodes("dd#establishment-joined-date-value") %>%
+    html_text()
+  
+  school_phases <- page %>%
+    html_nodes("dd#establishment-phase-type-value") %>%
+    html_text() %>%
+    stringr::str_replace_all("\\s+", " ") %>%  # Replace multiple whitespace characters with a single space
+    stringr::str_trim()  # Trim leading and trailing whitespace
+  
+  data.frame(
+    MAT_UID = mat_uid,
+    MAT_Name = mat_name,
+    School_Name = school_names,
+    School_URN = school_urns,
+    School_LAESTAB = school_laestabs,
+    Status = school_statuses,
+    Joined_Date = school_joined_dates,
+    Phase_Type = school_phases,
+    stringsAsFactors = FALSE
+  )
+}
