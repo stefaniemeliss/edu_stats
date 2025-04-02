@@ -18,6 +18,14 @@ if (!dir.exists(dir_misc)) {
 
 # Load necessary libraries
 library(data.table)
+library(rvest)
+library(dplyr)
+library(foreach)
+library(doParallel)
+
+# Source external functions
+devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
+
 
 #### source: https://get-information-schools.service.gov.uk/Search ####
 # date downloaded 02/12/2024
@@ -353,3 +361,54 @@ setorder(out, laestab)
 # save file
 fwrite(out, file = file.path(dir_data, "data_establishments_download.csv"))
 
+
+#### source: https://get-information-schools.service.gov.uk/Groups/Search?SelectedTab=Groups&b=1&b=4&search-by=all&searchtype=GroupAll ####
+# date downloaded 02/04/2025
+gc()
+stem <- "Establishment_groups"
+# All establishments --> Download these search results --> Full set of data + Links
+groups <- fread(file = file.path(dir_misc, stem, "GroupExtract.csv"), fill = Inf)
+
+# Focus on MATs
+groups <- groups[`Group Type` == "Multi-academy trust"]
+
+# Focus on MATs with linked establishments
+groups <- groups[`Number of linked providers` > 0]
+
+
+# save UIDs for querying
+mat_uids <- groups[, UID] 
+# mat_uids <- mat_uids[1:3] # debug
+
+# Set up parallel processing
+num_cores <- detectCores() - 2  # Use two less than the total number of cores
+cl <- makeCluster(num_cores)
+registerDoParallel(cl)
+
+# Parallel processing of MAT UIDs using foreach
+results_list <- foreach(mat_uid = mat_uids, .packages = c("rvest", "dplyr", "stringr")) %dopar% {
+  mat_schools <- get_schools_for_mat(mat_uid)
+  return(mat_schools)
+}
+
+# Stop the cluster
+stopCluster(cl)
+
+# Combine the results into a single data frame
+results <- bind_rows(results_list)
+
+# add region
+lookup <- res[, la_name, gor_name]
+lookup <- lookup[!duplicated(lookup)]
+lookup <- lookup[!gor_name %in% c("Not Applicable", "Wales (pseudo)")]
+
+results <- results %>%
+  left_join(., lookup, by = join_by(Local_Authority == la_name))
+
+# change column names
+names(results) <- tolower(names(results))
+names(results) <- gsub("_name", "", names(results))
+names(results) <- gsub("school_", "", names(results))
+
+# save file
+fwrite(results, file = file.path(dir_data, "data_establishments_groups.csv"))
