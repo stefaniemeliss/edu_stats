@@ -513,7 +513,28 @@ create_urn_df <- function(data, start_year, end_year) {
 # Function to get schools for a given MAT UID
 get_schools_for_mat <- function(mat_uid) {
   url <- paste0("https://www.get-information-schools.service.gov.uk/Groups/Group/Details/", mat_uid, "#list")
-  page <- read_html(url)
+
+  # Retry mechanism for URL connection
+  max_attempts <- 5
+  attempt <- 1
+  page <- NULL
+  
+  while (is.null(page) && attempt <= max_attempts) {
+    page <- tryCatch({
+      read_html(url)
+    }, error = function(e) {
+      message("Attempt ", attempt, " failed: ", e)
+      attempt <<- attempt + 1
+      Sys.sleep(1)  # Wait for 1 second before retrying
+      return(NULL)
+    })
+  }
+  
+  # Return NULL if page could not be opened after max_attempts
+  if (is.null(page)) {
+    message("Failed to open URL after ", max_attempts, " attempts: ", url)
+    return(NULL)
+  }
   
   mat_name <- page %>%
     html_node("#establishment-group-name") %>%  # Assuming the MAT name is in a span with id "establishment-group-name"
@@ -546,6 +567,11 @@ get_schools_for_mat <- function(mat_uid) {
     stringr::str_replace_all("\\s+", " ") %>%  # Replace multiple whitespace characters with a single space
     stringr::str_trim()  # Trim leading and trailing whitespace
   
+  school_local_authorities <- page %>%
+    html_nodes("dd#establishment-la-value") %>%
+    html_text()
+  
+  
   data.frame(
     MAT_UID = mat_uid,
     MAT_Name = mat_name,
@@ -555,6 +581,7 @@ get_schools_for_mat <- function(mat_uid) {
     Status = school_statuses,
     Joined_Date = school_joined_dates,
     Phase_Type = school_phases,
+    Local_Authority = school_local_authorities,
     stringsAsFactors = FALSE
   )
 }
