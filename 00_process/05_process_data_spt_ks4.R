@@ -124,10 +124,18 @@ write.csv(meta, file = file.path(dir_misc, "meta_spt_ks4.csv"), row.names = F)
 urn_list <- unique(ks4$urn)
 sum(is.na(urn_list))
 
+ks4$laestab <- paste0(ks4$lea, ks4$estab)
+laestab_list <- unique(ks4$laestab)
+sum(is.na(laestab_list))
+match <- ks4[, c("urn", "laestab", "time_period")]
+match <- match[!duplicated(match), ]
+ks4$laestab <- NULL
+
 scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
                   data.frame(urn = as.numeric(urn_list)))
 
 scaffold <- merge(scaffold, timings, by = "time_period")
+scaffold <- merge(match, scaffold, by = id_cols)
 
 
 # The main outcome measure in Key Stage 4 performance tables 
@@ -538,12 +546,12 @@ tmp <- ks4[, c(id_cols, cols_to_merge)]
 df <- merge(df, tmp, by = id_cols, all = T)
 
 # save data
-df <- merge(df, scaffold, by = id_cols, all = T)
+df <- merge(scaffold, df, by = id_cols, all = T)
 
 # remove duplicates
 df <- df[!duplicated(df), ]
 
-df <- df[with(df, order(urn, time_period)),]
+df <- df[with(df, order(laestab, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_spt_ks4.csv"), row.names = F)
 
 
