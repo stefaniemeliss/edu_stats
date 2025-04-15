@@ -27,6 +27,7 @@ id_cols <- c("time_period", "urn")
 id_cols <- c("time_period", "urn", "laestab")
 id_cols <- c("time_period", "laestab")
 
+get_urns <- F
 
 # Pupil to teacher ratios - school level #
 
@@ -123,6 +124,7 @@ files <- files[!grepl("meta", files)]
 
 # determine cols to keep
 cols_to_keep <- c(id_cols, "urn_wtc",
+                  "characteristic_group", "characteristic",
                   "gender", "age_group", "ethnicity_major",
                   "grade", "working_pattern", "qts_status", "on_route",
                   "full_time_equivalent", "headcount", "fte_school_percent", "headcount_school_percent")
@@ -150,6 +152,7 @@ for (f in 1:length(files)) {
   
 }
 
+gc()
 # rename columns
 names(teach_char) <- gsub("headcount", "hc", names(teach_char))
 names(teach_char) <- gsub("school_percent", "perc", names(teach_char))
@@ -165,7 +168,22 @@ teach_char <- teach_char %>%
   mutate(across(matches("fte|hc"), ~as.numeric(gsub(",", "", .)))) %>%
   # replace spaces
   mutate(across(where(is.character), ~gsub(" ", "_", .))) %>%
+  # re-compute the percentages 
+  # determine total
+  mutate(
+    hc_total = hc[characteristic_group == "Total" & characteristic == "Total"],
+    fte_total = fte[characteristic_group == "Total" & characteristic == "Total"],
+    .by = c(time_period, laestab, urn_wtc)
+  ) %>%
+  # re-compute percentages
+  mutate(
+    hc_perc = hc / hc_total * 100,
+    fte_perc = fte / fte_total * 100
+  ) %>%
+  # drop total columns
+  select(-c(hc_total, fte_total)) %>%
   as.data.frame()
+
 
 # determine value variables
 values <- c("hc", "fte", "hc_perc", "fte_perc")
@@ -228,76 +246,137 @@ wtc <- teach_char %>%
                          names_from = qts_status,
                          names_glue = "{.value}_qts_{qts_status}",
                          values_from = {values}),
-    by = cols) %>% 
+    by = cols)
+
+# check which variables are complete
+non_na_gender <- wtc %>% filter_at(vars(grep("fte_gender", names(wtc))),any_vars(!is.na(.))) # most incomplete
+non_na_age <- wtc %>% filter_at(vars(grep("fte_age", names(wtc))),any_vars(!is.na(.))) # similarly complete
+non_na_ethn <- wtc %>% filter_at(vars(grep("fte_ethn", names(wtc))),any_vars(!is.na(.))) # similarly complete
+non_na_grade <- wtc %>% filter_at(vars(grep("fte_grade", names(wtc))),any_vars(!is.na(.))) # similarly complete
+non_na_pattern <- wtc %>% filter_at(vars(grep("fte_pattern", names(wtc))),any_vars(!is.na(.))) # similarly complete
+non_na_qts <- wtc %>% filter_at(vars(grep("fte_qts", names(wtc))),any_vars(!is.na(.))) # similarly complete
+rm(list=ls(pattern="^non_na_"))
+gc()
+
+# MUTATE data
+wtc <- wtc %>%
   mutate(
-    # fill gaps in total data
-    tmp = rowSums(across(matches("hc_grade")), na.rm = T),
-    hc = ifelse(is.na(hc), tmp, hc),
-    tmp = rowSums(across(matches("fte_grade")), na.rm = T),
-    fte = ifelse(is.na(fte), tmp, fte),
-    
-    # fill NAs with zeros where possible
+    # fill gaps in total data: grade chosen here but could have also used age, ethnicity, pattern or qts
+    tmp_hc = rowSums(across(matches("hc_grade")), na.rm = T),
+    hc = ifelse(is.na(hc), tmp_hc, hc),
+    tmp_fte = rowSums(across(matches("fte_grade")), na.rm = T),
+    fte = ifelse(is.na(fte), tmp_fte, fte)
+    ,
+    # fill NAs with zeros where possible: GENDER
+    # tmp = get HC count based on all gender columns
+    # if count is equal to HC (tmp == hc), then replace NA with 0 in all gender columns
     tmp = rowSums(across(matches("hc_gender_")), na.rm = T),
     across(matches("hc_gender_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_gender_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("hc_perc_gender_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    across(matches("fte_perc_gender_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    
+    across(matches("fte_perc_gender_"), ~ifelse(tmp == hc & is.na(.), 0, .))
+    ,
+    # fill NAs with zeros where possible: AGE
+    # tmp = get HC count based on all age columns
+    # if count is equal to HC (tmp == hc), then replace NA with 0 in all age columns
     tmp = rowSums(across(matches("hc_age_")), na.rm = T),
     across(matches("hc_age_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_age_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("hc_perc_age_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    across(matches("fte_perc_age_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    
+    across(matches("fte_perc_age_"), ~ifelse(tmp == hc & is.na(.), 0, .))
+    ,
+    # fill NAs with zeros where possible: ETHNICITY
+    # tmp = get HC count based on all ethnicity columns
+    # if count is equal to HC (tmp == hc), then replace NA with 0 in all ethnicity columns
     tmp = rowSums(across(matches("hc_ethnicity_")), na.rm = T),
     across(matches("hc_ethnicity_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_ethnicity_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("hc_perc_ethnicity_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    across(matches("fte_perc_ethnicity_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    
+    across(matches("fte_perc_ethnicity_"), ~ifelse(tmp == hc & is.na(.), 0, .))
+    ,
+    # fill NAs with zeros where possible: GRADE
+    # tmp = get HC count based on all grade columns
+    # if count is equal to HC (tmp == hc), then replace NA with 0 in all grade columns
     tmp = rowSums(across(matches("hc_grade_")), na.rm = T),
     across(matches("hc_grade_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_grade_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("hc_perc_grade_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    across(matches("fte_perc_grade_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    
+    across(matches("fte_perc_grade_"), ~ifelse(tmp == hc & is.na(.), 0, .))
+    ,
+    # fill NAs with zeros where possible: PATTERN
+    # tmp = get HC count based on all pattern columns
+    # if count is equal to HC (tmp == hc), then replace NA with 0 in all pattern columns
     tmp = rowSums(across(matches("hc_pattern_")), na.rm = T),
     across(matches("hc_pattern_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_pattern_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("hc_perc_pattern_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    across(matches("fte_perc_pattern_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    
+    across(matches("fte_perc_pattern_"), ~ifelse(tmp == hc & is.na(.), 0, .))
+    ,
+    # fill NAs with zeros where possible: QTS
+    # tmp = get HC count based on all qts columns
+    # if count is equal to HC (tmp == hc), then replace NA with 0 in all qts columns
     tmp = rowSums(across(matches("hc_qts_")), na.rm = T),
     across(matches("hc_qts_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("fte_qts_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
     across(matches("hc_perc_qts_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    across(matches("fte_perc_qts_"), ~ifelse(tmp == hc & is.na(.), 0, .)),
-    tmp = NULL, 
-    
-    # compute aggregates
+    across(matches("fte_perc_qts_"), ~ifelse(tmp == hc & is.na(.), 0, .))
+    ,
+    # delete tmp
+    tmp = NULL)
+
+# CHECK NA COUNT: zero for all but gender
+na_count <- as.data.frame(apply(wtc, 2, function(x){sum(is.na(x))}))
+na_count$var = row.names(na_count)
+rm(na_count)
+gc()
+
+# COMPUTE GROUP AGGREGRATES
+wtc <- wtc %>%
+  mutate(
+    # COMPUTE LARGER AGE GROUPS: UNDER 30
+    # add up all groups that are combined in the larger group and divide by TOTAL hc or fte
     hc_age_under_30 = rowSums(select(., "hc_age_Under_25", "hc_age_25_to_29"), na.rm = T),
     hc_perc_age_under_30 = hc_age_under_30/hc * 100,
     fte_age_under_30 = rowSums(select(., "fte_age_Under_25", "fte_age_25_to_29"), na.rm = T),
     fte_perc_age_under_30 = fte_age_under_30/fte * 100,
     
+    # COMPUTE LARGER AGE GROUPS: 30 - 49
+    # add up all groups that are combined in the larger group and divide by TOTAL hc or fte
     hc_age_30_to_49 = rowSums(select(., "hc_age_30_to_39", "hc_age_40_to_49"), na.rm = T),
     hc_perc_age_30_to_49 = hc_age_30_to_49/hc * 100,
     fte_age_30_to_49 = rowSums(select(., "fte_age_30_to_39", "fte_age_40_to_49"), na.rm = T),
     fte_perc_age_30_to_49 = fte_age_30_to_49/fte * 100,
     
-    hc_age_50_and_over = rowSums(select(., "hc_age_50_to_59", "hc_age_60_and_over"), na.rm = T),
-    hc_perc_age_50_and_over = hc_age_50_and_over/hc * 100,
-    fte_age_50_and_over = rowSums(select(., "fte_age_50_to_59", "fte_age_60_and_over"), na.rm = T),
-    fte_perc_age_50_and_over = fte_age_50_and_over/fte * 100,
+    # COMPUTE LARGER AGE GROUPS: OVER 49
+    # add up all groups that are combined in the larger group and divide by TOTAL hc or fte
+    hc_age_over_49 = rowSums(select(., "hc_age_50_to_59", "hc_age_60_and_over"), na.rm = T),
+    hc_perc_age_over_49 = hc_age_over_49/hc * 100,
+    fte_age_over_49 = rowSums(select(., "fte_age_50_to_59", "fte_age_60_and_over"), na.rm = T),
+    fte_perc_age_over_49 = fte_age_over_49/fte * 100,
     
     # estimate average age of teachers at a school
+    # 1. use the hc or fte in each category, multiply it by the category midpoint
+    # 2. add up across categories 
+    # 3. divide by hc or fte for KNOWN categories
+    # 4. this INCLUDES any hc_age_Age_unclassified or fte_age_Age_unclassified
     hc_avg_age      = (hc_age_Under_25 * 22.5 + hc_age_25_to_29 * 27 + hc_age_30_to_39 * 34.5 + 
                          hc_age_40_to_49 * 44.5 + hc_age_50_to_59 * 54.5 + hc_age_60_and_over * 62.5)/hc,
     fte_avg_age     = (fte_age_Under_25 * 22.5 + fte_age_25_to_29 * 27 + fte_age_30_to_39 * 34.5 + 
-                         fte_age_40_to_49 * 44.5 + fte_age_50_to_59 * 54.5 + fte_age_60_and_over * 62.5)/fte
+                         fte_age_40_to_49 * 44.5 + fte_age_50_to_59 * 54.5 + fte_age_60_and_over * 62.5)/fte,
     
-  ) %>% #as.data.frame()
-  # select(matches("time|urn|laestab|Female|White|British|Classroom|hc|fte|age")) %>%
+    # estimate average age of teachers at a school
+    # 1. use the hc or fte in each category, multiply it by the category midpoint
+    # 2. add up across categories 
+    # 3. divide by hc or fte for KNOWN categories
+    # 4. this OMITS any hc_age_Age_unclassified or fte_age_Age_unclassified
+    hc_avg_age_known  = (hc_age_Under_25 * 22.5 + hc_age_25_to_29 * 27 + hc_age_30_to_39 * 34.5 + 
+                           hc_age_40_to_49 * 44.5 + hc_age_50_to_59 * 54.5 + hc_age_60_and_over * 62.5)
+    /(hc_age_Under_25 + hc_age_25_to_29 + hc_age_30_to_39 + hc_age_40_to_49 + hc_age_50_to_59 + hc_age_60_and_over),
+    fte_avg_age_known = (fte_age_Under_25 * 22.5 + fte_age_25_to_29 * 27 + fte_age_30_to_39 * 34.5 + 
+                           fte_age_40_to_49 * 44.5 + fte_age_50_to_59 * 54.5 + fte_age_60_and_over * 62.5)
+    /(fte_age_Under_25 + fte_age_25_to_29 + fte_age_30_to_39 + fte_age_40_to_49 + fte_age_50_to_59 + fte_age_60_and_over)
+  ) %>% 
+  # SELECT columns to keep
   select(matches("time|urn|laestab|Female|White|British|Classroom|age")) %>%
   select(matches("time_period|urn|laestab|fte_perc|avg_age")) %>%
   as.data.frame()
@@ -305,7 +384,18 @@ wtc <- teach_char %>%
 apply(wtc, 2, function(x) {sum(is.na(x))})
 
 
-get_urns <- F
+## ISSUE WITH AVERAGE AGE ##
+wtc$tmp <- wtc$fte_avg_age - wtc$fte_avg_age_known # determine how much we underestimated the age
+wtc$tmp_rd <- round(wtc$tmp, 1) # round
+# plot data that has noticeable underestimation
+wtc[wtc$tmp_rd != 0,] %>% 
+  ggplot(aes(x = tmp)) + 
+  geom_histogram(stat = "bin", binwidth = 1, boundary = 1) + 
+  stat_bin(geom='text', aes(label=..count..), binwidth = 1, boundary = 1, vjust = -.5)
+wtc$tmp <- NULL
+wtc$tmp_rd <- NULL
+                                   
+
 # GET URN NUMBERS #
 if (get_urns) {
   
