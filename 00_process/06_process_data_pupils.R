@@ -207,6 +207,11 @@ col_p <- "pnpupfsm_ever_spt"
 out[, col_n] <- df[, "numfsmever"]
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
 
+# FSM ever (taken from Performance Tables) but data from school census used to compute percentage
+col_p <- "pnpupfsm_ever"
+col_tot <- "npuptot"
+out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+
 # % of pupils whose first language is known or believed to be other than English
 col_n <- "npupeal"
 col_p <- "pnpupeal"
