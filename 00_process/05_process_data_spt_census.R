@@ -88,12 +88,29 @@ for (year in start:finish) {
   
 }
 
-# process meta data #
+# ------ process meta data ------ #
 meta <- meta[with(meta, order(variable, time_period)), ]
 # save meta data #
 write.csv(meta, file = file.path(dir_misc, "meta_spt_census.csv"), row.names = F)
 
-# process census data #
+# ------ process census data ------ #
+
+### add data from FOI 2025-0008906 request ###
+
+# read in file
+file = file.path(dir_misc, "FOI_2025-0008906_SMeliss_FSM6_Final.xlsx")
+foi <- xlsx::read.xlsx(file = file, sheetIndex = 1, startRow = 3)
+
+# process data
+foi$numfsmever <- foi$FSM6
+foi$time_period <- 201920
+
+# select columns
+foi <- foi[, c(id_cols, "numfsmever")]
+
+# add to census data
+copy <- census
+census <- rbind.all.columns(census, foi)
 
 # create scaffold to safe data
 urn_list <- unique(census$urn)
@@ -154,6 +171,7 @@ df <- merge(df, census[, c(id_cols,
                            "tsenelk", "psenelk", # eligible pupils with SEN support
                            "tsenelse", "psenelse" # SEN pupils with a statement or EHC plan
                            )], by = id_cols, all = T)
+
 
 
 # remove duplicates
