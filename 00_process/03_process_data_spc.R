@@ -26,6 +26,8 @@ dir_in <- file.path(dir_data, "school-pupils-and-their-characteristics")
 
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:23, 11:24)
+lookup <- data.frame(time_period = as.numeric(years_list),
+                     academic_year = as.numeric(substr(years_list, 1, 4)))
 
 # rename folders that currently only have one year included (data collected in Jan)
 rename_folders <- F
@@ -245,8 +247,8 @@ df <- spc %>%
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>% 
   mutate(
-    # make date a date again
-    open_date = as.Date(open_date, origin = "1970-01-01"),
+    # # make date a date again
+    # open_date = as.Date(open_date, origin = "1970-01-01"),
     # replace NA in LAESTAB where possible
     laestab = ifelse(is.na(laestab) & !is.na(old_la_code) & !is.na(estab), 
                      as.numeric(paste0(old_la_code, estab)), 
@@ -256,62 +258,23 @@ df <- spc %>%
   select(time_period,
          urn,  
          estab, laestab,
-         school, 
-         school_postcode,
-         region, region_code,
-         urban_rural,
-         parl_con_code, parl_con, # Parliamentary Constituency
-         new_la_code, old_la_code, la, # Local Authority
-         district_administrative_code, district_administrative, # district
-         ward_code, ward, # Ward is a subdivision of a local authority area or district, typically used for electoral purposes of local council
-         cas_ward_code, cas_ward, # Census Ward
-         open_date,
-         phase_of_education, school_type, phase_type_grouping, type_of_establishment, academy_flag, trust,
-         form_7_school_type, form_7_school_type_description, middle_school,
-         school_size,
-         sex_of_school_description, denomination, admissions_policy
-  ) %>%
+         school) %>%
   # group by schools
   group_by(urn) %>%
   mutate(
     # fill missing values: observations to be carried backward
     across(c(estab, laestab,
-             school,
-             school_postcode,
-             region, region_code,
-             urban_rural,
-             parl_con_code, parl_con,
-             new_la_code, old_la_code, la,
-             district_administrative_code, district_administrative,
-             ward_code, ward,
-             cas_ward_code, cas_ward,
-             open_date,
-             school_type, phase_of_education, phase_type_grouping,
-             type_of_establishment,
-             sex_of_school_description, denomination, admissions_policy, middle_school),
+             school),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = TRUE)),
     # fill missing values: observations to be carried forward
     across(c(estab, laestab,
-             school,
-             school_postcode,
-             region, region_code,
-             urban_rural,
-             parl_con_code, parl_con,
-             new_la_code, old_la_code, la,
-             district_administrative_code, district_administrative,
-             ward_code, ward,
-             cas_ward_code, cas_ward,
-             open_date,
-             school_type, phase_of_education, phase_type_grouping,
-             type_of_establishment,
-             sex_of_school_description, denomination, admissions_policy,
-             form_7_school_type, form_7_school_type_description, middle_school),
+             school),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
   ungroup() %>%
   # filter schools without school level observation data
   filter(!is.na(laestab)) %>%
   # save the specific columns as CSV
-  {data.table::fwrite(select(., time_period, urn, laestab, old_la_code, estab, school, school_postcode), 
+  {data.table::fwrite(select(., time_period, urn, laestab, school), 
                       file.path(dir_data,"data_identifiers.csv")); .} %>%
   # sort data
   arrange(urn, time_period) %>%
@@ -319,7 +282,7 @@ df <- spc %>%
 
 # add deprivation data #
 
-add_deprivation_data = T
+add_deprivation_data = F
 
 if (add_deprivation_data) {
   
@@ -379,8 +342,6 @@ df <- merge_timelines_across_columns(data_in = spc,
                                      stem = new_col,
                                      data_out = df)
 
-names(spc)[grepl("girl", names(spc))]
-
 # number of pupils female
 cols_to_merge <- c("headcount_total_girls", "headcount_total_female", "headcount_total_girls__rounded_")
 
@@ -404,23 +365,6 @@ df <- merge_timelines_across_columns(data_in = spc,
                                      stem = new_col,
                                      data_out = df)
 
-# % of pupils known to be eligible for free school meals	
-# Number of pupils know to be eligible for FSM expressed as a percentage of the total number of pupils
-
-cols_to_merge <- c("perc_of_pupils_known_to_be_eligible_for_free_school_meals", 
-                   "perc_of_pupils_known_to_be_eligible_for_and_claiming_free_school_meals")
-new_col <- "pnpupfsm_e"
-
-df <- merge_timelines_across_columns(data_in = spc, 
-                                     identifier_columns = id_cols, 
-                                     column_vector = cols_to_merge,
-                                     stem = new_col,
-                                     data_out = df)
-
-
-# new_col_p <- "pnpupfsm_e"
-# df[, new_col_p] <- df[, new_col] / df$npuptot__spc * 100
-
 # number of pupils taking a free school meal on census day	
 cols_to_merge <- c("number_of_pupils_taking_free_school_meals", 
                    "number_of_pupils_taking_a_free_school_meal_on_census_day",
@@ -433,21 +377,6 @@ df <- merge_timelines_across_columns(data_in = spc,
                                      stem = new_col,
                                      data_out = df)
 
-# percentage of pupils taking a free school meal on census day	
-# new_col_p <- "pnpupfsm_t"
-#df[, new_col_p] <- df[, new_col] / df$npuptot__spc * 100
-
-cols_to_merge <- c("perc_of_pupils_taking_free_school_meals",
-                   "perc_of_fsm_eligible_pupils_taking_free_school_meals",
-                   "perc_of_pupils_taking_free_school_meals_on_census_day")
-new_col <- "pnpupfsm_t"
-df <- merge_timelines_across_columns(data_in = spc,
-                                     identifier_columns = id_cols,
-                                     column_vector = cols_to_merge,
-                                     stem = new_col,
-                                     data_out = df)
-
-
 # Number of pupils (used for FSM calculation in Performance Tables)	
 new_col <- "npup_calcspt"
 spc[, new_col] <- spc$number_of_pupils__used_for_fsm_calculation_in_performance_tables_
@@ -458,24 +387,10 @@ new_col <- "npupfsm_e_spt"
 spc[, new_col] <- spc$number_of_pupils_known_to_be_eligible_for_free_school_meals__performance_tables_
 df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 
-# percentage of pupils known to be eligible for free school meals (School Performance Tables)	
-# Number of pupils know to be eligible for FSM (School Performance Tables) expressed as a percentage of the total number of pupils (used for FSM calculation in Performance Tables)
-new_col <- "pnpupfsm_e_spt"
-spc[, new_col] <- spc$perc_of_pupils_known_to_be_eligible_for_free_school_meals__performance_tables_
-df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
-
 # number of pupils whose first language is known or believed to be other than English	
+# First language category expressed as a percentage of the total number of pupils of compulsory school age and above
 new_col <- "npupeal"
 spc[, new_col] <- spc$number_of_pupils_whose_first_language_is_known_or_believed_to_be_other_than_english
-df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
-
-# % of pupils whose first language is known or believed to be other than English
-# First language category expressed as a percentage of the total number of pupils of compulsory school age and above
-# new_col_p <- "pnpupeal"
-# df[, new_col_p] <- df[, new_col] / df[, "npupcaa__spc"] * 100
-
-new_col <- "pnpupeal"
-spc[, new_col] <- spc$perc_of_pupils_whose_first_language_is_known_or_believed_to_be_other_than_english
 df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 
 # ethnic origin #
@@ -486,13 +401,6 @@ new_col <- "npupeowb"
 spc[, new_col] <- spc$number_of_pupils_classified_as_white_british_ethnic_origin
 df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 
-new_col <- "pnpupeowb" 
-spc[, new_col] <- spc$perc_of_pupils_classified_as_white_british_ethnic_origin
-df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
-
-# new_col_p <- "pnpupeowb" 
-# df[, new_col_p] <- df[, new_col] / df[, "npupcaa__spc"] * 100
-
 # Black ethnic origin
 
 new_col <- "npupeobl" 
@@ -500,17 +408,11 @@ tmp <- spc[, grepl("urn|time_period|as_black|as_caribbean|as_african|other_black
 tmp[, new_col] <- rowSums(tmp[, grepl("num", names(tmp))], na.rm = T)
 df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
-# new_col_p <- "pnpupeobl" 
-# df[, new_col_p] <- df[, new_col] / df[, "npupcaa__spc"] * 100
-
 # Asian ethnic origin
 new_col <- "npupeoas" 
 tmp <- spc[, grepl("urn|time_period|indian|paki|bangl|chin|other_asian", names(spc))]
 tmp[, new_col] <- rowSums(tmp[, grepl("num", names(tmp))], na.rm = T)
 df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
-
-# new_col_p <- "pnpupeoas" 
-# df[, new_col_p] <- df[, new_col] / df[, "npupcaa__spc"] * 100
 
 # total number of classes taught by one teacher
 # one teacher classes as taught during a single selected period in each school on the day of the census
@@ -569,15 +471,92 @@ df <- merge_timelines_across_columns(data_in = spc,
 # remove duplicates
 df <- df[!duplicated(df), ]
 
+# GET URN NUMBERS #
+get_urns <- F
+
+if (get_urns) {
+  
+  # Step 1: Initial Input
+  
+  # get school identifiers from all dfs
+  urn_list <- unique(df$urn)
+  laestab_list <- unique(df$laestab)
+  
+  # read in data
+  est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
+  
+  # select relevant laestab only and relevant columns
+  est <- est[est$laestab %in% laestab_list | est$urn %in% urn_list, c("laestab", "urn", "opendate", "closedate")]
+  
+  # define academic years
+  academic_years <- lookup$academic_year
+  
+  # Step 2a: Identify Schools with Single Entries
+  
+  laestab_s <- est %>%
+    group_by(laestab) %>%
+    summarise(n = n()) %>%
+    filter(n == 1) %>%
+    pull(laestab)
+  
+  # Step 2b: Identify Schools with Multiple Entries
+  
+  laestab_m <- est %>%
+    group_by(laestab) %>%
+    summarise(n = n()) %>%
+    filter(n > 1) %>%
+    pull(laestab)
+  
+  # Step 4: process schools with single entry
+  
+  scaffold <- merge(data.frame(time_period = academic_years),
+                    data.frame(laestab = laestab_s))
+  urn_s <- est %>%
+    filter(laestab %in% laestab_s) %>%
+    select(-c(opendate, closedate)) %>%
+    full_join(scaffold, ., by = "laestab") %>% 
+    as.data.frame()
+  
+  # Step 5: process schools with multiple entries
+  urn_m <- create_urn_df(est[est$laestab %in% laestab_m, ], 2010, 2023)
+  
+  # combine schools with single and multiple entries
+  urn <- rbind(urn_s, urn_m)
+  
+  # fix time_period
+  urn$time_period <- plyr::mapvalues(urn$time_period, lookup$academic_year, lookup$time_period, warn_missing = TRUE)
+  
+  # save urns
+  data.table::fwrite(urn, file = file.path(dir_misc, "data_spc_urn.csv"), row.names = F)
+  
+} else {
+  
+  # read in urn data
+  urn <- read.csv(file = file.path(dir_misc, "data_spc_urn.csv"))
+}
+
+# COMBINE ALL DFs #
+
+# get school identifiers from all dfs
+urn_list <- unique(urn$urn)
+laestab_list <- unique(urn$laestab)
+
+
 # create scaffold to safe data
 urn_list <- unique(df$urn)
 
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = as.numeric(urn_list)))
+# create scaffold to safe data
+scaffold <- merge(data.frame(time_period = as.integer(years_list)),
+                  # data.frame(urn = urn_list))
+                  data.frame(laestab = laestab_list))
 
-df <- df %>%
-  # join with scaffold
-  full_join(x = scaffold, y = ., by = id_cols) 
+# process data
+df <- scaffold %>%
+  # merge with urn info
+  full_join(., urn, by = c("time_period", "laestab")) %>%
+  # merge with data
+  full_join(., df, by = c("time_period", "laestab", "urn")) 
+
 
 # save file
 df <- df[with(df, order(urn, time_period)),]
@@ -586,59 +565,23 @@ data.table::fwrite(df, file = file.path(dir_data, "data_spc.csv"), row.names = F
 #### create var dict ####
 dict <- data.frame(variable = names(df)[!grepl("_tag", names(df))])
 dict$explanation <- c("academic year",
-                      "unique reference number",
                       "Establishment (ESTAB) number",
+                      "unique reference number",
                       "Establishment (ESTAB) number within its local authority",
                       "name of school",
-                      "postcode of school",
-                      "region name",
-                      "region code",
-                      "urban vs. rural",
-                      "parlimentary constituency code",
-                      "parlimentary constituency name",
-                      "local authority code - old",
-                      "local authority code - new",
-                      "local authority name",
-                      "disctrict code",
-                      "disctrict name",
-                      "ward code",
-                      "ward name",
-                      "cas ward code",
-                      "cas ward name",
-                      "date school opened",
-                      "stage or level of education that a school provides",
-                      "classification of schools based on their organisational structure and the education",
-                      "categorises schools based on the phase of education they provide and groups them into broader categories for analysis and reporting purposes",
-                      "specific classification of a school based on its governance, funding, and educational provision",
-                      "is academy?",
-                      "belongs to trust",
-                      "form 7 classification of schools",
-                      "form 7 classification of schools",
-                      "middle school, bridge between primary (elementary) and secondary (high) education",
-                      "size of school (grouped)",
-                      "single sex or mixed school",
-                      "religious denomination of school",
-                      "admissions policy",
-                      "IDACI Decile (1 = most deprived, 10 = least deprived)",
+
                       "headcount pupils",
                       "FTE pupils",
                       "number of pupils of compulsary age and above",
                       "number of pupils female",
                       "number of pupils eligible for FSM",
-                      "perc of pupils eligible for FSM",
                       "number of pupils taking FSM",
-                      "perc of pupils taking FSM",
                       "number of pupils (SPT)",
                       "number of pupils eligible for FSM (SPT)",
-                      "perc of pupils eligible for FSM (SPT)",
                       "number of EAL pupils",
-                      "perc of EAL pupils",
                       "number of pupils classified as white British ethnic origin",
-                      "perc of pupils classified as white British ethnic origin",
                       "number of pupils classified as Black ethnic origin",
-                      #"perc of pupils classified as Black ethnic origin",
                       "number of pupils classified as Asian ethnic origin",
-                      #"perc of pupils classified as Asian ethnic origin",
                       "number of classes taught by one teacher",
                       "number of pupils in classes taught by one teacher",
                       "average class size")
