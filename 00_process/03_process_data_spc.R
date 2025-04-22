@@ -487,7 +487,8 @@ if (get_urns) {
   
   # select relevant laestab only and relevant columns
   est <- est[est$laestab %in% laestab_list | est$urn %in% urn_list, c("laestab", "urn", "opendate", "closedate")]
-  
+  est <- est[!is.na(est$laestab), ]
+
   # define academic years
   academic_years <- lookup$academic_year
   
@@ -519,7 +520,7 @@ if (get_urns) {
   
   # Step 5: process schools with multiple entries
   urn_m <- create_urn_df(est[est$laestab %in% laestab_m, ], 2010, 2023)
-  
+
   # combine schools with single and multiple entries
   urn <- rbind(urn_s, urn_m)
   
@@ -540,10 +541,6 @@ if (get_urns) {
 # get school identifiers from all dfs
 urn_list <- unique(urn$urn)
 laestab_list <- unique(urn$laestab)
-
-
-# create scaffold to safe data
-urn_list <- unique(df$urn)
 
 # create scaffold to safe data
 scaffold <- merge(data.frame(time_period = as.integer(years_list)),
