@@ -8,7 +8,6 @@ rm(list = ls())
 gc()
 
 # load libraries
-library(kableExtra)
 library(dplyr)
 
 devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
@@ -45,6 +44,7 @@ ptr <- ptr %>%
 
 # select columns
 ptr <- ptr[, grepl("time_period|urn|laestab|fte|ratio|school|la|region|type", names(ptr))]
+ptr <- ptr[, grepl("time_period|urn|laestab|fte|ratio|school", names(ptr))]
 ptr <- ptr[, !grepl("code|number", names(ptr))]
 
 # Teacher absences - school level #
@@ -388,10 +388,11 @@ apply(wtc, 2, function(x) {sum(is.na(x))})
 wtc$tmp <- wtc$fte_avg_age - wtc$fte_avg_age_known # determine how much we underestimated the age
 wtc$tmp_rd <- round(wtc$tmp, 1) # round
 # plot data that has noticeable underestimation
+library(ggplot2)
 wtc[wtc$tmp_rd != 0,] %>% 
   ggplot(aes(x = tmp)) + 
   geom_histogram(stat = "bin", binwidth = 1, boundary = 1) + 
-  stat_bin(geom='text', aes(label=..count..), binwidth = 1, boundary = 1, vjust = -.5)
+  stat_bin(geom = 'text', aes(label = after_stat(count)), binwidth = 1, boundary = 1, vjust = -.5)
 wtc$tmp <- NULL
 wtc$tmp_rd <- NULL
                                    
@@ -502,11 +503,11 @@ df <- scaffold %>%
   mutate(
     # fill missing values: observations to be carried backward
     # across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
-    across(c(region, la, school, school_type),
+    across(c(school, school_type),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = TRUE)),
     # fill missing values: observations to be carried forward
     # across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
-    across(c(region, la, school, school_type),
+    across(c(school, school_type),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
   ungroup() %>%
   # re-compute ratios
