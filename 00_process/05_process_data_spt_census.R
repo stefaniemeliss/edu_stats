@@ -95,6 +95,17 @@ write.csv(meta, file = file.path(dir_misc, "meta_spt_census.csv"), row.names = F
 
 # ------ process census data ------ #
 
+# add laestab
+census <- census %>%
+  mutate(
+    # replace NA in LAESTAB where possible
+    laestab = ifelse(is.na(laestab) & !is.na(la) & !is.na(estab), 
+                     as.numeric(paste0(la, estab)), 
+                     laestab)
+  ) %>%
+  relocate(time_period) %>%
+  as.data.frame()
+
 ### add data from FOI 2025-0008906 request ###
 
 # read in file
@@ -108,17 +119,38 @@ foi$time_period <- 201920
 # select columns
 foi <- foi[, c(id_cols, "numfsmever")]
 
+
+# get laestab number for each school #
+
+# read in data
+est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
+
+# select revevant rows and columns
+est <- est[est$urn %in% foi$urn, c("urn", "laestab")]
+
+# merge 
+foi <- merge(est, foi, by = "urn")
+
 # add to census data
-copy <- census
 census <- rbind.all.columns(census, foi)
+
+# remove duplicate entries from census
+census <- census[!duplicated(census), ]
 
 # create scaffold to safe data
 urn_list <- unique(census$urn)
 sum(is.na(urn_list))
+laestab_list <- unique(census$laestab)
+sum(is.na(laestab_list))
 
 scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = as.numeric(urn_list)))
+                  data.frame(laestab = as.numeric(laestab_list)))
+id_cols <- names(scaffold)
 
+# add correct urn mapping to scaffold
+urn <- read.csv(file = file.path(dir_misc, "data_spc_urn.csv"))
+urn <- urn[urn$urn %in% urn_list, ]
+scaffold <- merge(scaffold, urn, by = id_cols, all.x = T)
 
 # Total number of pupils on roll (all ages)
 # TOTPUPSENDN - Total number of pupils on roll (all ages) - 2011-11 to 2013/14
@@ -132,46 +164,21 @@ df <- merge_timelines_across_columns(data_in = census,
                                      stem = new_col,
                                      data_out = scaffold)
 
-# NUMFSM - Number of pupils eligible for free school meals
-# PNUMFSM - Percentage of pupils eligible for free school meals
-# NUMFSMEVER - Number of pupils eligible for FSM at any time during the past 6 years
-# PNUMFSMEVER - Percentage of pupils eligible for FSM at any time during the past 6 years
-# TOTPUPFSMDN - Number of pupils used in FSM calculation
-# NUMEAL - Number of pupils with English not as first language
-# PNUMEAL - Percentage of pupils with English not as first language
-# TOTPUPEALDN - Number of pupils of compulsory school age and above
-# TOTPUPSENDN	Total number of pupils on roll (all ages)
-
-df <- merge(df, census[, c(id_cols, "numfsm", "pnumfsm", 
-                           "numfsmever", "pnumfsmever",
-                           "totpupfsmdn",
-                           "numeal", "pnumeal",
-                           "totpupealdn")], by = id_cols, all = T)
-
-# special educational needs #
-
-# TSENA - Number of pupils on roll with SEN on School Action
-# PSENA - Percentage of pupils on roll with SEN on School Action
-# TOTSENAP - Total pupils with school  action+
-# PTOTSENAP - Percentage pupils with school  action+
-# TOTSENST - Total pupils with SEN statement
-# PTOTSENST - Percentage pupils with SEN statement
-# TSENSAP - Number of pupils SEN statement or on School Action Plus 
-# PSENSAP - Percentage of pupils SEN statement or on School Action Plus 
-# TSENELK - Number of eligible pupils with SEN support
-# PSENELK - Percentage of eligible pupils with SEN support
-# TSENELSE - Number of SEN pupils with a statement or EHC plan
-# PSENELSE - Percenatge of SEN pupils with a statement or EHC plan
-
-df <- merge(df, census[, c(id_cols, 
-                           "tsena", "psena", # pupils on roll with SEN on School Action
-                           "totsenap", "ptotsenap", # pupils on roll with school action plus
-                           "totsenst", "ptotsenst", # pupils on roll with SEN statement
-                           #"tsensap", "psensap", # SEN statement or on School Action Plus - IGNORE?
-                           "tsenelk", "psenelk", # eligible pupils with SEN support
-                           "tsenelse", "psenelse" # SEN pupils with a statement or EHC plan
-                           )], by = id_cols, all = T)
-
+# select other columns
+df <- merge(df, census[, c(id_cols,
+                            "numfsm", # NUMFSM - Number of pupils eligible for free school meals
+                            "numfsmever", # NUMFSMEVER - Number of pupils eligible for FSM at any time during the past 6 years
+                            "totpupfsmdn", # TOTPUPFSMDN - Number of pupils used in FSM calculation
+                            "numeal", # NUMEAL - Number of pupils with English not as first language
+                            "totpupealdn", # TOTPUPEALDN - Number of pupils of compulsory school age and above
+                            "tsena", # TSENA - Number of pupils on roll with SEN on School Action
+                            "totsenap", # TOTSENAP - Total pupils with school  action+
+                            "totsenst", # TOTSENST - Total pupils with SEN statement
+                            #"tsensap",  # TSENSAP - Number of pupils SEN statement or on School Action Plus  - IGNORE?
+                            "tsenelk", # TSENELK - Number of eligible pupils with SEN support
+                            "tsenelse" # TSENELSE - Number of SEN pupils with a statement or EHC plan
+                            )], 
+             by = c(id_cols), all = T)
 
 
 # remove duplicates
