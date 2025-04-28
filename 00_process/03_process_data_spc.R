@@ -257,17 +257,17 @@ df <- spc %>%
   # select columns
   select(time_period,
          urn,  
-         estab, laestab,
+         laestab,
          school) %>%
   # group by schools
   group_by(urn) %>%
   mutate(
     # fill missing values: observations to be carried backward
-    across(c(estab, laestab,
+    across(c(laestab,
              school),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = TRUE)),
     # fill missing values: observations to be carried forward
-    across(c(estab, laestab,
+    across(c(laestab,
              school),
            ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
   ungroup() %>%
@@ -527,6 +527,15 @@ if (get_urns) {
   # fix time_period
   urn$time_period <- plyr::mapvalues(urn$time_period, lookup$academic_year, lookup$time_period, warn_missing = TRUE)
   
+  # fill in NAs
+  urn <- urn %>%
+    arrange(laestab, time_period) %>%
+    group_by(laestab) %>%
+    mutate(urn = zoo::na.locf(urn, na.rm = FALSE, fromLast = TRUE)) %>%
+    mutate(urn = zoo::na.locf(urn, na.rm = FALSE, fromLast = FALSE)) %>%
+    ungroup() %>%
+    as.data.frame()
+  
   # save urns
   data.table::fwrite(urn, file = file.path(dir_misc, "data_spc_urn.csv"), row.names = F)
   
@@ -536,8 +545,11 @@ if (get_urns) {
   urn <- read.csv(file = file.path(dir_misc, "data_spc_urn.csv"))
 }
 
-# COMBINE ALL DFs #
+urn <- urn %>% arrange(laestab, time_period)
+check <- urn %>% filter(is.na(urn))
 
+# COMBINE ALL DFs #
+gc()
 # get school identifiers from all dfs
 urn_list <- unique(urn$urn)
 laestab_list <- unique(urn$laestab)
@@ -564,7 +576,6 @@ dict <- data.frame(variable = names(df)[!grepl("_tag", names(df))])
 dict$explanation <- c("academic year",
                       "Establishment (ESTAB) number",
                       "unique reference number",
-                      "Establishment (ESTAB) number within its local authority",
                       "name of school",
 
                       "headcount pupils",
@@ -636,3 +647,4 @@ if(process_deprivation_data){
   data.table::fwrite(depr, file.path(dir_misc, "data_deprivation_2019_by_school_postcodes_2010_2023.csv"))
   
 }
+
