@@ -8,10 +8,12 @@
 options(scipen = 999)
 # empty work space
 rm(list = ls())
+gc()
 
 # load libraries
 library(kableExtra)
 library(dplyr)
+library(data.table)
 
 devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
 
@@ -101,33 +103,61 @@ for (i in seq_along(start:finish)) {
   
 }
 
+# Fill NAs in laestab
 
+# *old* LA code
+cols_to_merge <- c("la_code_old", "old_la_code")
+new_col <- "old_la_code_merged"
+
+sen <- merge_timelines_across_columns(data_in = sen, 
+                                     identifier_columns = id_cols, 
+                                     column_vector = cols_to_merge,
+                                     stem = new_col,
+                                     data_out = sen)
+
+# fill NA
+sen <- sen %>% 
+  select(-c(year)) %>%
+  relocate(time_period, urn, laestab) %>%
+  rename(urn_sen = urn) %>%
+  mutate(
+    # # make date a date again
+    # replace NA in LAESTAB where possible
+    laestab = ifelse(is.na(laestab) & !is.na(old_la_code_merged) & !is.na(estab), 
+                     as.numeric(paste0(old_la_code_merged, estab)), 
+                     laestab)
+  ) %>% 
+  as.data.frame()
 
 
 #### extract relevant data ####
-library(data.table)
 
 # load spt data
 spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
 # select columns
 spt <- spt[,  .SD, .SDcols = grepl("time_period|urn|laestab|sen", names(spt))]
+names(spt)[names(spt) == "urn"] <- "urn_spt"
 
 # merge with SEND
-sen2 <- merge(sen, spt, by = id_cols, all = T)
+sen <- merge(sen, spt, by = c("time_period", "laestab"), all = T)
 
 # create scaffold to safe data
-urn_list <- unique(sen2$urn)
+urn_list <- unique(sen$urn)
 sum(is.na(urn_list))
 
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(urn = urn_list))
+laestab_list <- unique(sen$laestab)
+sum(is.na(laestab_list))
 
+scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
+                  # data.frame(urn = urn_list))
+                  data.frame(laestab = laestab_list))
+id_cols = names(scaffold) # overwrite
 
 # number of pupils
 cols_to_merge <- c("pupils", "total_pupils")
 new_col <- "npuptot__sen"
 
-df <- merge_timelines_across_columns(data_in = sen2, 
+df <- merge_timelines_across_columns(data_in = sen, 
                                      identifier_columns = id_cols, 
                                      column_vector = cols_to_merge,
                                      stem = new_col,
@@ -139,11 +169,11 @@ df <- merge_timelines_across_columns(data_in = sen2,
 cols_to_merge <- c("schoolaction", "school_action")
 new_col <- "npup_school_action" # pupils on roll with SEN on School Action
 
-tmp <- merge_timelines_across_columns(data_in = sen2, 
+tmp <- merge_timelines_across_columns(data_in = sen, 
                                      identifier_columns = id_cols, 
                                      column_vector = cols_to_merge,
                                      stem = new_col,
-                                     data_out = sen2)
+                                     data_out = sen)
 
 # fix roundings
 # data for 2012/13 - 2013/14 reported in SEN is rounded in comparison to numbers reported in SPT
@@ -163,11 +193,11 @@ df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 cols_to_merge <- c("schoolactionplus", "school_action_plus")
 new_col <- "npup_school_action_plus" # pupils on roll with school  action plus
 
-tmp <- merge_timelines_across_columns(data_in = sen2, 
+tmp <- merge_timelines_across_columns(data_in = sen, 
                                             identifier_columns = id_cols, 
                                             column_vector = cols_to_merge,
                                             stem = new_col,
-                                            data_out = sen2)
+                                            data_out = sen)
 
 # fix roundings
 # data for 2012/13 - 2013/14 reported in SEN is rounded in comparison to numbers reported in SPT
@@ -185,7 +215,7 @@ df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 # "SEN support" is the current system used in schools to help children with special educational needs 
 # who do not have an Education, Health and Care (EHC) plan. 
 new_col <- "npup_sen_support"
-sen2[, new_col] <- sen2[, "sen_support"]
+sen[, new_col] <- sen[, "sen_support"]
 
 # fix roundings
 # data for 2014/15 - 2016/17 reported in SEN is rounded in comparison to numbers reported in SPT
@@ -194,7 +224,7 @@ tmp <- fix_roundings(var_rd = new_col, var_nrd = "tsenelk",
                      col_to_filter = "time_period",
                      filter = c(201415, 201516, 201617),
                      rounding_factor = 5,
-                     data_in = sen2)
+                     data_in = sen)
 
 # combine 
 df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
@@ -205,11 +235,11 @@ df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 cols_to_merge <- c("statements", "statement")
 new_col <- "npup_statement" # pupils on roll with SEN statement
 
-tmp <- merge_timelines_across_columns(data_in = sen2, 
+tmp <- merge_timelines_across_columns(data_in = sen, 
                                       identifier_columns = id_cols, 
                                       column_vector = cols_to_merge,
                                       stem = new_col,
-                                      data_out = sen2)
+                                      data_out = sen)
 
 # fix roundings
 # data for 2012/13 - 2013/14 reported in SEN is rounded in comparison to numbers reported in SPT
@@ -231,11 +261,11 @@ df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 cols_to_merge <- c("statement_ehc_plan", "ehc_plan")
 new_col <- "npup_ehcp" # pupils on roll with EHC plan or statement
 
-tmp <- merge_timelines_across_columns(data_in = sen2, 
+tmp <- merge_timelines_across_columns(data_in = sen, 
                                       identifier_columns = id_cols, 
                                       column_vector = cols_to_merge,
                                       stem = new_col,
-                                      data_out = sen2)
+                                      data_out = sen)
 
 # fix roundings
 # data for 2014/15 - 2016/17 reported in SEN is rounded in comparison to numbers reported in SPT
@@ -272,7 +302,7 @@ df[, "npupsen"] <- rowSums(df[, c("npup_school_action", "npup_school_action_plus
                                   "npup_statement", "npup_ehcp")], na.rm = T)
 
 #### save data ####
-df <- df[with(df, order(urn, time_period)),]
+df <- df[with(df, order(laestab, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_sen.csv"), row.names = F)
 
 #### create var dict ####
