@@ -102,13 +102,15 @@ for (i in seq_along(start:finish)) {
 }
 
 
+
+
 #### extract relevant data ####
 library(data.table)
 
 # load spt data
 spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
 # select columns
-spt <- spt[,  .SD, .SDcols = grepl("time_period|urn|sen", names(spt))]
+spt <- spt[,  .SD, .SDcols = grepl("time_period|urn|laestab|sen", names(spt))]
 
 # merge with SEND
 sen2 <- merge(sen, spt, by = id_cols, all = T)
