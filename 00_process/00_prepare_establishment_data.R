@@ -31,13 +31,17 @@ devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/func
 # date downloaded 02/12/2024
 stem <- "Establishment_search"
 # All establishments --> Download these search results --> Full set of data + Links
-res <- fread(file = file.path(dir_misc, stem, "results.csv"), fill = Inf)
+res <- fread(file.path(dir_misc, stem, "results.csv"), fill = TRUE, header = TRUE, sep = ",")
+
 
 # fix col names
 names(res) <- tolower(names(res))
 names(res) <- gsub("(", "", names(res), fixed = T)
 names(res) <- gsub(")", "", names(res), fixed = T)
 names(res) <- gsub(" ", "_", names(res), fixed = T)
+
+# Convert encoding using iconv
+res$establishmentname <- iconv(res$establishmentname, from = "latin1", to = "UTF-8")
 
 # select cols
 dt <- res[, .SD, .SDcols = 
@@ -47,7 +51,7 @@ dt <- res[, .SD, .SDcols =
             grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor|parlia|district|ward|la_name|linked|v1", names(res))]
 
 # # Subset data
-# dt <- dt[la_code != 0 & # no data from schools that are not affiliated with a LA 
+# dt <- dt[la_code != 0 & # no data from schools that are not affiliated with a LA
 #            !is.na(establishmentnumber) & # or don't have an estab number
 #            country_name %in% c("United Kingdom", "") & # or are in Jersey or Gibralta
 #            !grepl("Welsh|Further education|Miscellaneous|Higher education institutions|Online provider", typeofestablishment_name) & # only schools
@@ -58,8 +62,8 @@ start <- which(names(dt) == "linked_establishments")
 dt[, links := do.call(paste, c(.SD, sep = " ")), .SDcols = start:ncol(dt)]
 
 # Ensure laestab_number has leading zeros and concatenate with dfe_number
-dt[, establishmentnumber := sprintf("%04d", establishmentnumber)]
-dt[, laestab := as.numeric(paste0(la_code, establishmentnumber))]
+dt[, establishmentnumber_str := ifelse(!is.na(establishmentnumber), sprintf("%04d", establishmentnumber), NA)]
+dt[, laestab := ifelse(!is.na(establishmentnumber), as.numeric(paste0(la_code, establishmentnumber_str)), NA)]
 
 # format dates
 dt[, opendate := ifelse(opendate == "", NA_character_, opendate)]
@@ -112,7 +116,7 @@ dt_long[dt_long, linked_establishmentname := i.establishmentname, on = .(linked_
 setorder(dt_long, urn, variable)
 
 # save file
-fwrite(dt_long, file = file.path(dir_data, "data_linked_establishments.csv"))
+fwrite(dt_long, file = file.path(dir_data, "data_linked_establishments.csv"), bom = T)
 
 # fix religion #
 # Define a pattern to match Christian denominations
@@ -192,7 +196,7 @@ if(process_deprivation_data){
 }
 
 # add IDACI
-add_deprivation_data = T
+add_deprivation_data = F
 
 if (add_deprivation_data) {
   
@@ -228,7 +232,7 @@ if (add_deprivation_data) {
 
 # add latitude and longitute
 
-add_coord_data = T
+add_coord_data = F
 
 if (add_coord_data) {
   
@@ -250,14 +254,14 @@ if (add_coord_data) {
 
 # select columns
 out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
-              street, postcode, town, gor_name, la_name, districtadministrative_name, administrativeward_name, parliamentaryconstituency_name, lat, long,
+              street, postcode, town, gor_name, la_name, districtadministrative_name, administrativeward_name, parliamentaryconstituency_name, #lat, long,
               typeofestablishment_name, 
               establishmentstatus_name, opendate, reasonestablishmentopened_name,
               closedate, reasonestablishmentclosed_name,
               phaseofeducation_name, statutorylowage, statutoryhighage,
               boarders_name, nurseryprovision_name, officialsixthform_name,
               gender_name, sex_students, religiouscharacter_name, religiouscharacter_christian, diocese_name,
-              admissionspolicy_name, urbanrural_name, urbanicity, idaci_decile_2015, idaci_decile_2019, imd_employment_decile_2015, imd_employment_decile_2019,
+              admissionspolicy_name, urbanrural_name, urbanicity, #idaci_decile_2015, idaci_decile_2019, imd_employment_decile_2015, imd_employment_decile_2019,
               trustschoolflag_name, trusts_name, links
 )]
 
@@ -265,7 +269,7 @@ out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
 setorder(out, urn)
 
 # save file
-fwrite(out, file = file.path(dir_data, "data_establishments_search.csv"))
+fwrite(out, file = file.path(dir_data, "data_establishments_search.csv"), bom = T)
 
 
 #### source: https://get-information-schools.service.gov.uk/Downloads ####
@@ -280,6 +284,7 @@ stem <- "Establishment_downloads"
 # Establishment links
 links <- fread(file = file.path(dir_misc, stem, "links_edubasealldata20241202.csv"))
 names(links) <- tolower(names(links))
+links$linkname <- iconv(links$linkname, from = "latin1", to = "UTF-8")
 
 # Establishment fields
 fields <- fread(file = file.path(dir_misc, stem, "edubasealldata20241202.csv"))
@@ -290,20 +295,22 @@ names(fields) <- gsub("(", "", names(fields), fixed = T)
 names(fields) <- gsub(")", "", names(fields), fixed = T)
 names(fields) <- gsub(" ", "_", names(fields), fixed = T)
 
+fields$establishmentname <- iconv(fields$establishmentname, from = "latin1", to = "UTF-8")
+
 # select cols
 dt <- fields[, .SD, .SDcols = 
                grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor", names(fields))]
 
-# Subset data
-dt <- dt[la_code != 0 & # no data from schools that are not affiliated with a LA 
-           !is.na(establishmentnumber) & # or don't have an estab number
-           !country_name %in% c("Gibraltar", "Jersey") & # or are in Jersey or Gibralta
-           !grepl("Welsh|Further education|Miscellaneous|Higher education institutions", typeofestablishment_name) & # only schools
-           !grepl("Wales|Not Applicable", gor_name)] # or Wales
+# # Subset data
+# dt <- dt[la_code != 0 & # no data from schools that are not affiliated with a LA
+#            !is.na(establishmentnumber) & # or don't have an estab number
+#            !country_name %in% c("Gibraltar", "Jersey") & # or are in Jersey or Gibralta
+#            !grepl("Welsh|Further education|Miscellaneous|Higher education institutions", typeofestablishment_name) & # only schools
+#            !grepl("Wales|Not Applicable", gor_name)] # or Wales
 
 # Ensure laestab_number has leading zeros and concatenate with dfe_number
-dt[, establishmentnumber := sprintf("%04d", establishmentnumber)]
-dt[, laestab := as.numeric(paste0(la_code, establishmentnumber))]
+dt[, establishmentnumber_str := ifelse(!is.na(establishmentnumber), sprintf("%04d", establishmentnumber), NA)]
+dt[, laestab := ifelse(!is.na(establishmentnumber), as.numeric(paste0(la_code, establishmentnumber_str)), NA)]
 
 # extract key
 key <- dt[, .(laestab, urn, establishmentname)]
@@ -356,10 +363,10 @@ out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
               previousla_code, previousestablishmentnumber
 )]
 # sort
-setorder(out, laestab)
+setorder(out, urn)
 
 # save file
-fwrite(out, file = file.path(dir_data, "data_establishments_download.csv"))
+fwrite(out, file = file.path(dir_data, "data_establishments_download.csv"), bom = T)
 
 # Establishment groups
 groups <- fread(file = file.path(dir_misc, stem, "academiesmatmembership20241202.csv"))
@@ -369,6 +376,9 @@ names(groups) <- tolower(names(groups))
 names(groups) <- gsub("(", "", names(groups), fixed = T)
 names(groups) <- gsub(")", "", names(groups), fixed = T)
 names(groups) <- gsub(" ", "_", names(groups), fixed = T)
+
+groups$establishmentname <- iconv(groups$establishmentname, from = "latin1", to = "UTF-8")
+groups$group_name <- iconv(groups$group_name, from = "latin1", to = "UTF-8")
 
 # filter rows
 groups <- groups[group_status != "Closed"]
@@ -393,7 +403,7 @@ groups <- merge(lookup, groups, by = "la_name", all.y = T)
 groups <- groups[!is.na(urn)] # remove MATs without any schools
 
 # save file
-fwrite(groups, file = file.path(dir_data, "data_establishments_groups.csv"))
+fwrite(groups, file = file.path(dir_data, "data_establishments_groups.csv"), bom = T)
 
 
 #### source: https://get-information-schools.service.gov.uk/Groups/Search?SelectedTab=Groups&b=1&b=4&search-by=all&searchtype=GroupAll ####
@@ -446,6 +456,6 @@ if (query_schools) {
     left_join(., lookup, by = join_by(local_authority == la_name))
   
   # save file
-  fwrite(results, file = file.path(dir_data, "data_establishments_groups.csv"))
+  fwrite(results, file = file.path(dir_data, "data_establishments_groups.csv"), bom = T)
 }
 
