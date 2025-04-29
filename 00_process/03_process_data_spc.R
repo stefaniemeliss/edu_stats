@@ -86,14 +86,14 @@ for (i in seq_along(start:finish)) {
   
   # read in pupil on roll data
   tmp_p <- read.csv(file = files_pupils[i])
-  
+
   # change col names
   names(tmp_p) <- tolower(gsub("X...", "", names(tmp_p), fixed = T))
   names(tmp_p) <- gsub("x..", "perc.", names(tmp_p), fixed = T)
   names(tmp_p) <- gsub(".", "_", names(tmp_p), fixed = T)
-  
+
   # subset to exclude any non-school level data
-  tmp_p <- tmp_p %>% filter(urn != "", urn != 0)
+  tmp_p <- tmp_p %>% filter(urn != "" & urn != 0)
   
   # remove school that was registered twice
   tmp_p <- tmp_p[!(tmp_p$urn == 143840 & tmp_p$estab == 6008), ]
@@ -108,7 +108,7 @@ for (i in seq_along(start:finish)) {
   }
   
   # filter to remove columns
-  tmp_p <- tmp_p[, !grepl("_time_|unclassified|key_stage|early_year|nursery|reception|subsi", names(tmp_p))]
+  tmp_p <- tmp_p[, !grepl("_time_|key_stage|early_year|nursery|reception|subsi", names(tmp_p))]
   
   # clean data
   tmp_p <- tmp_p %>% 
@@ -241,44 +241,85 @@ for (i in seq_along(start:finish)) {
 
 #### extract relevant data ####
 
+# Clean information on school identifiers #
 
-# only select columns that have more than 1 unique observation
-df <- spc %>% 
-  # remove columns that are uninformative
-  select(where(~length(unique(na.omit(.x))) > 1)) %>% 
+# read in establishment data
+est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
+est <- as.data.frame(fread(file.path(dir_data, "data_establishments_download.csv"), encoding = "UTF-8"))
+est <- est[!is.na(est$laestab), ]
+
+# select relevant laestab and urn only and relevant columns
+est <- est[!duplicated(est), c("laestab", "urn", "establishmentname")]
+names(est) <- c("laestab", "urn_est", "school")
+
+# extract all id pairings
+ids <- spc %>% 
+  # replace NA in LAESTAB where possible
   mutate(
-    # # make date a date again
-    # open_date = as.Date(open_date, origin = "1970-01-01"),
-    # replace NA in LAESTAB where possible
-    laestab = ifelse(is.na(laestab) & !is.na(old_la_code) & !is.na(estab), 
-                     as.numeric(paste0(old_la_code, estab)), 
+    laestab = ifelse(is.na(laestab) & !is.na(old_la_code) & !is.na(estab),
+                     as.numeric(paste0(old_la_code, estab)),
                      laestab)
   ) %>%
   # select columns
-  select(time_period,
-         urn,  
-         laestab,
-         school) %>%
-  # group by schools
-  group_by(urn) %>%
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
   mutate(
-    # fill missing values: observations to be carried backward
-    across(c(laestab,
-             school),
-           ~zoo::na.locf(., na.rm = FALSE, fromLast = TRUE)),
-    # fill missing values: observations to be carried forward
-    across(c(laestab,
-             school),
-           ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
-  ungroup() %>%
-  # filter schools without school level observation data
-  filter(!is.na(laestab)) %>%
-  # save the specific columns as CSV
-  {data.table::fwrite(select(., time_period, urn, laestab, school), 
-                      file.path(dir_data,"data_identifiers.csv")); .} %>%
+    urn_match = urn %in% est$urn_est
+    ) %>%
   # sort data
-  arrange(urn, time_period) %>%
+  arrange(urn) %>%
+  # rename
+  rename(urn_spc = urn,
+         laestab_spc = laestab) %>%
   as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_spc[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_spc == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_spc, urn_est)
+    ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_spc, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in spc
+spc <- spc %>% 
+  # remove columns that are uninformative
+  select(where(~length(unique(na.omit(.x))) > 1)) %>% 
+  # rename original id columns
+  rename(urn_spc = urn, laestab_spc = laestab, school_spc = school) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  as.data.frame()
+
+
+# select subset of columns
+df <- spc %>% 
+  # select columns
+  select(time_period,
+         urn,
+         laestab, 
+         school) %>%
+  as.data.frame()
+apply(df, 2, function(x){sum(is.na(x))})  
+  
 
 # add deprivation data #
 
@@ -305,7 +346,7 @@ if (add_deprivation_data) {
     full_join(., as.data.frame(depr), by = "school_postcode") %>% as.data.frame()
 }
 
-
+# merge timelines across columns #
 
 # headcount
 # Headcount of pupils	= Full-time + part-time pupils
@@ -353,6 +394,30 @@ df <- merge_timelines_across_columns(data_in = spc,
                                      stem = new_col,
                                      data_out = df)
 
+# number of pupils male
+cols_to_merge <- c("headcount_total_boys", "headcount_total_male", "headcount_total_boys__rounded_")
+
+new_col <- "npupm"
+
+df <- merge_timelines_across_columns(data_in = spc, 
+                                     identifier_columns = id_cols, 
+                                     column_vector = cols_to_merge,
+                                     stem = new_col,
+                                     data_out = df)
+
+# # pupil gender clean up
+# 
+# # some schools have NA for npuptot and NA for npupf [npupm] but 0 for npupm [npupf]
+# # the NA was likely caused by replacing the x (statistical suppression) with NAs whereas 0 are correct
+# # but 0 for npupm [npupf] are meaningless if npuptot and npupf [npupm] are unknown
+# # hence, replace all zeros to allow to remove schools without data later
+# 
+# df$npupf <- ifelse(df$npupf == 0 & is.na(df$npuptot__spc) & is.na(df$npupm), NA, df$npupf)
+# df$npupf_tag <- ifelse(df$npupf == 0 & is.na(df$npuptot__spc) & is.na(df$npupm), NA, df$npupf_tag)
+# 
+# df$npupm <- ifelse(df$npupm == 0 & is.na(df$npuptot__spc) & is.na(df$npupf), NA, df$npupm)
+# df$npupm_tag <- ifelse(df$npupm == 0 & is.na(df$npuptot__spc) & is.na(df$npupf), NA, df$npupm_tag)
+
 
 # number of pupils known to be eligible for free school meals
 cols_to_merge <- c("number_of_pupils_known_to_be_eligible_for_free_school_meals", 
@@ -387,11 +452,32 @@ new_col <- "npupfsm_e_spt"
 spc[, new_col] <- spc$number_of_pupils_known_to_be_eligible_for_free_school_meals__performance_tables_
 df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 
+# first language #
+# number of pupils whose first language is known or believed to be English	
+new_col <- "npupenl" # English as a Native Language
+spc[, new_col] <- spc$number_of_pupils_whose_first_language_is_known_or_believed_to_be_english
+df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
+
 # number of pupils whose first language is known or believed to be other than English	
-# First language category expressed as a percentage of the total number of pupils of compulsory school age and above
-new_col <- "npupeal"
+new_col <- "npupeal" # English as additional language
 spc[, new_col] <- spc$number_of_pupils_whose_first_language_is_known_or_believed_to_be_other_than_english
 df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
+
+# number of pupils whose first language is unclassified	
+new_col <- "npupflu" # first language unclassified
+spc[, new_col] <- spc$number_of_pupils_whose_first_language_is_unclassified
+df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
+
+# # pupil language clean up
+# 
+# # some schools have NA for npuptot and NA for npupenl [npupeal] but 0 for npupeal [npupenl]
+# # the NA was likely caused by replacing the x (statistical suppression) with NAs whereas 0 are correct
+# # but 0 for npupeal [npupenl] are meaningless if npuptot and npupenl [npupeal] are unknown
+# # hence, replace all zeros to allow to remove schools without data later
+# 
+# df$npupenl <- ifelse(df$npupenl == 0 & is.na(df$npuptot__spc) & is.na(df$npupeal), NA, df$npupenl)
+# 
+# df$npupeal <- ifelse(df$npupeal == 0 & is.na(df$npuptot__spc) & is.na(df$npupenl), NA, df$npupeal)
 
 # ethnic origin #
 # Number of pupils by ethnic group	Includes pupils of compulsory school age and above only
@@ -406,17 +492,31 @@ df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
 new_col <- "npupeobl" 
 tmp <- spc[, grepl("urn|time_period|as_black|as_caribbean|as_african|other_black", names(spc))]
 tmp[, new_col] <- rowSums(tmp[, grepl("num", names(tmp))], na.rm = T)
+tmp$na_count <- rowSums(is.na(tmp[, grepl("num", names(tmp))]))
+tmp[, new_col] <- ifelse(tmp$na_count == 5, NA, tmp[, new_col])
 df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
 
 # Asian ethnic origin
 new_col <- "npupeoas" 
 tmp <- spc[, grepl("urn|time_period|indian|paki|bangl|chin|other_asian", names(spc))]
 tmp[, new_col] <- rowSums(tmp[, grepl("num", names(tmp))], na.rm = T)
+tmp$na_count <- rowSums(is.na(tmp[, grepl("num", names(tmp))]))
+tmp[, new_col] <- ifelse(tmp$na_count == 5, NA, tmp[, new_col])
 df <- merge(df, tmp[, c(id_cols, new_col)], by = id_cols, all = T)
+
+# ethnic origin unclassified
+new_col <- "npupeou" 
+spc[, new_col] <- spc$number_of_pupils_unclassified
+df <- merge(df, spc[, c(id_cols, new_col)], by = id_cols, all = T)
+
+
+rm(tmp)
+gc()
+
 
 # total number of classes taught by one teacher
 # one teacher classes as taught during a single selected period in each school on the day of the census
-# replace all zeros with NAs
+# data cleaning: replace all zeros with NAs as 0 suggests that no classes were taught by one teacher, unlikely!
 spc <- spc %>% 
   mutate(across(matches("classes_taught"), ~ifelse(. == 0, NA, .))) %>% as.data.frame()
 
@@ -466,33 +566,49 @@ df <- merge_timelines_across_columns(data_in = spc,
                                      stem = new_col,
                                      data_out = df)
 
+
 #### save data ####
+
 
 # remove duplicates
 df <- df[!duplicated(df), ]
 
+
+# remove all rows that do not have 
+df <- df %>%
+  ungroup() %>%
+  # count NAs in each row
+  mutate(na_count = rowSums(is.na(df))) %>%
+  # remove empty rows (i.e., 29 NA per row)
+  filter(na_count != 29) %>%
+  # remove rows that have 0 in npup_calcspt and no other obs
+  filter(!(npup_calcspt == 0 & na_count == 28)) %>%
+  select(-na_count) %>%
+  as.data.frame()
+
 # GET URN NUMBERS #
+
 get_urns <- F
 
 if (get_urns) {
   
   # Step 1: Initial Input
   
-  # get school identifiers from all dfs
-  urn_list <- unique(df$urn)
-  laestab_list <- unique(df$laestab)
-  
-  # read in data
-  est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
-  
-  # select relevant laestab only and relevant columns
-  est <- est[est$laestab %in% laestab_list | est$urn %in% urn_list, c("laestab", "urn", "opendate", "closedate")]
-  est <- est[!is.na(est$laestab), ]
-
   # define academic years
   academic_years <- lookup$academic_year
   
-  # Step 2a: Identify Schools with Single Entries
+  # get school identifiers from df
+  urn_list <- unique(df$urn)
+  laestab_list <- unique(df$laestab)
+
+  # read in establishment data
+  est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
+  est <- est[!is.na(est$laestab), ]
+  
+  # select relevant laestab and urn only and relevant columns
+  est <- est[est$laestab %in% laestab_list | est$urn %in% urn_list, c("laestab", "urn", "opendate", "closedate")]
+  
+  # Step 3a: Identify Schools with Single Entries
   
   laestab_s <- est %>%
     group_by(laestab) %>%
@@ -500,7 +616,7 @@ if (get_urns) {
     filter(n == 1) %>%
     pull(laestab)
   
-  # Step 2b: Identify Schools with Multiple Entries
+  # Step 3b: Identify Schools with Multiple Entries
   
   laestab_m <- est %>%
     group_by(laestab) %>%
@@ -527,15 +643,6 @@ if (get_urns) {
   # fix time_period
   urn$time_period <- plyr::mapvalues(urn$time_period, lookup$academic_year, lookup$time_period, warn_missing = TRUE)
   
-  # fill in NAs
-  urn <- urn %>%
-    arrange(laestab, time_period) %>%
-    group_by(laestab) %>%
-    mutate(urn = zoo::na.locf(urn, na.rm = FALSE, fromLast = TRUE)) %>%
-    mutate(urn = zoo::na.locf(urn, na.rm = FALSE, fromLast = FALSE)) %>%
-    ungroup() %>%
-    as.data.frame()
-  
   # save urns
   data.table::fwrite(urn, file = file.path(dir_misc, "data_spc_urn.csv"), row.names = F)
   
@@ -545,51 +652,38 @@ if (get_urns) {
   urn <- read.csv(file = file.path(dir_misc, "data_spc_urn.csv"))
 }
 
-urn <- urn %>% arrange(laestab, time_period)
-check <- urn %>% filter(is.na(urn))
 
 # COMBINE ALL DFs #
 gc()
-# get school identifiers from all dfs
-urn_list <- unique(urn$urn)
-laestab_list <- unique(urn$laestab)
-
-# create scaffold to safe data
-scaffold <- merge(data.frame(time_period = as.integer(years_list)),
-                  # data.frame(urn = urn_list))
-                  data.frame(laestab = laestab_list))
-
-# process data
-df <- scaffold %>%
-  # merge with urn info
-  full_join(., urn, by = c("time_period", "laestab")) %>%
-  # merge with data
-  full_join(., df, by = c("time_period", "laestab", "urn")) 
 
 
 # save file
-df <- df[with(df, order(urn, time_period)),]
+df <- df[with(df, order(laestab, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_spc.csv"), row.names = F)
 
 #### create var dict ####
 dict <- data.frame(variable = names(df)[!grepl("_tag", names(df))])
 dict$explanation <- c("academic year",
-                      "Establishment (ESTAB) number",
                       "unique reference number",
+                      "Establishment (ESTAB) number",
                       "name of school",
 
                       "headcount pupils",
                       "FTE pupils",
                       "number of pupils of compulsary age and above",
                       "number of pupils female",
+                      "number of pupils male",
                       "number of pupils eligible for FSM",
                       "number of pupils taking FSM",
                       "number of pupils (SPT)",
                       "number of pupils eligible for FSM (SPT)",
-                      "number of EAL pupils",
+                      "number of English as native language pupils",
+                      "number of English as additional language pupils",
+                      "number of pupils with unclassified first language",
                       "number of pupils classified as white British ethnic origin",
                       "number of pupils classified as Black ethnic origin",
                       "number of pupils classified as Asian ethnic origin",
+                      "number of pupils unclassified ethnic origin",
                       "number of classes taught by one teacher",
                       "number of pupils in classes taught by one teacher",
                       "average class size")

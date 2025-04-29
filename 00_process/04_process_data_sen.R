@@ -11,7 +11,6 @@ rm(list = ls())
 gc()
 
 # load libraries
-library(kableExtra)
 library(dplyr)
 library(data.table)
 
@@ -103,55 +102,112 @@ for (i in seq_along(start:finish)) {
   
 }
 
-# Fill NAs in laestab
 
-# *old* LA code
+### Clean information on school identifiers ###
+
+# read in establishment data
+est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
+est <- as.data.frame(fread(file.path(dir_data, "data_establishments_download.csv"), encoding = "UTF-8"))
+est <- est[!is.na(est$laestab), ]
+
+# select relevant laestab and urn only and relevant columns
+est <- est[!duplicated(est), c("laestab", "urn", "establishmentname")]
+names(est) <- c("laestab", "urn_est", "school")
+
+# merge two columns for old LA code
 cols_to_merge <- c("la_code_old", "old_la_code")
 new_col <- "old_la_code_merged"
 
 sen <- merge_timelines_across_columns(data_in = sen, 
-                                     identifier_columns = id_cols, 
-                                     column_vector = cols_to_merge,
-                                     stem = new_col,
-                                     data_out = sen)
+                                      identifier_columns = id_cols, 
+                                      column_vector = cols_to_merge,
+                                      stem = new_col,
+                                      data_out = sen)
 
-# fill NA
-sen <- sen %>% 
-  select(-c(year)) %>%
-  relocate(time_period, urn, laestab) %>%
-  rename(urn_sen = urn) %>%
+
+# extract all id pairings
+ids <- sen %>% 
+  # replace NA in LAESTAB where possible
   mutate(
-    # # make date a date again
-    # replace NA in LAESTAB where possible
-    laestab = ifelse(is.na(laestab) & !is.na(old_la_code_merged) & !is.na(estab), 
-                     as.numeric(paste0(old_la_code_merged, estab)), 
+    laestab = ifelse(is.na(laestab) & !is.na(old_la_code_merged) & !is.na(estab),
+                     as.numeric(paste0(old_la_code_merged, estab)),
                      laestab)
+  ) %>%
+  # select columns
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
+  mutate(
+    urn_match = urn %in% est$urn_est
+  ) %>%
+  # sort data
+  arrange(urn) %>%
+  # rename
+  rename(urn_sen = urn,
+         laestab_sen = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_sen[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_sen == laestab)
   ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_sen, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_sen, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
   as.data.frame()
 
 
-#### extract relevant data ####
+# fix id information in census
+sen <- sen %>% 
+  # replace NA in LAESTAB where possible
+  mutate(
+    laestab = ifelse(is.na(laestab) & !is.na(old_la_code_merged) & !is.na(estab),
+                     as.numeric(paste0(old_la_code_merged, estab)),
+                     laestab)
+  ) %>%
+  # remove columns that are uninformative
+  select(where(~length(unique(na.omit(.x))) > 1)) %>% 
+  # rename original id columns
+  rename(urn_sen = urn, laestab_sen = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  as.data.frame()
+
+
+### extract relevant data ###
+
+# select subset of columns
+df <- sen %>% 
+  # select columns
+  select(time_period,
+         urn,
+         laestab, 
+         school) %>%
+  as.data.frame()
+apply(df, 2, function(x){sum(is.na(x))})  
 
 # load spt data
 spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
 # select columns
 spt <- spt[,  .SD, .SDcols = grepl("time_period|urn|laestab|sen", names(spt))]
-names(spt)[names(spt) == "urn"] <- "urn_spt"
 
 # merge with SEND
-sen <- merge(sen, spt, by = c("time_period", "laestab"), all = T)
-
-# create scaffold to safe data
-urn_list <- unique(sen$urn)
-sum(is.na(urn_list))
-
-laestab_list <- unique(sen$laestab)
-sum(is.na(laestab_list))
-
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  # data.frame(urn = urn_list))
-                  data.frame(laestab = laestab_list))
-id_cols = names(scaffold) # overwrite
+sen <- merge(sen, spt, by = id_cols, all.x = T)
 
 # number of pupils
 cols_to_merge <- c("pupils", "total_pupils")
@@ -161,7 +217,7 @@ df <- merge_timelines_across_columns(data_in = sen,
                                      identifier_columns = id_cols, 
                                      column_vector = cols_to_merge,
                                      stem = new_col,
-                                     data_out = scaffold)
+                                     data_out = df)
 
 # School Action (SEN Code of Practice 2001)
 # This stage involved the school providing additional or different support to help the child progress. 
@@ -301,6 +357,17 @@ df[, "npupsen"] <- rowSums(df[, c("npup_school_action", "npup_school_action_plus
                                   "npup_sen_support",
                                   "npup_statement", "npup_ehcp")], na.rm = T)
 
+# replace zeros with NA for rows without data
+df$tmp <- rowSums(is.na(df))
+
+df[, "npupsen"] <- ifelse(df$tmp == 9, NA, df[, "npupsen"])
+df[, "npupsen"] <- ifelse(df$tmp == 7 & !is.na(df$npuptot__sen), NA, df[, "npupsen"])
+
+# remove all rows that are empty due to statistical suppression
+df <- df[df$tmp != 9, ]
+
+df$tmp <- NULL
+
 #### save data ####
 df <- df[with(df, order(laestab, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_sen.csv"), row.names = F)
@@ -309,6 +376,8 @@ data.table::fwrite(df, file = file.path(dir_data, "data_sen.csv"), row.names = F
 dict <- data.frame(variable = names(df)[!grepl("_tag", names(df))])
 dict$explanation <- c("academic year",
                       "unique reference number",
+                      "LAESTAB",
+                      "school",
                       "total number of pupils",
                       "number of pupils with SEN on School Action",
                       "number of pupils with SEN on School Action Plus",

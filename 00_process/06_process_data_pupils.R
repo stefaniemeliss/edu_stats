@@ -6,7 +6,6 @@ rm(list = ls())
 gc()
 
 # load libraries
-library(kableExtra)
 library(dplyr)
 
 devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
@@ -19,7 +18,7 @@ dir_misc <- file.path(dir, "misc")
 # determine year list (akin to other data sources)
 years_list <- paste0(20, 10:23, 11:24)
 
-id_cols <- c("time_period", "urn")
+id_cols <- c("time_period", "laestab", "urn", "school")
 
 
 #### data on school capacity ####
@@ -33,17 +32,18 @@ id_cols <- c("time_period", "urn")
 # 5. 2019/20 data not available due to the cancellation of the 2020 School Capacity survey due to COVID-19.
 # 6. Number of pupils in places that exceed their school's capacity is the difference between school places and number of pupils on roll, for schools where the number of pupils on roll is higher than the school’s reported capacity. Calculated at school level and then summed to national, regional or local authority level.
 
-cap <- read.csv(file.path(dir_data, "school-capacity", "2022-23", "data", "school-capacity_200910-202223.csv"))
+cap <- read.csv(file.path(dir_data, "school-capacity", "2023-24", "data", "capacity_school_200910-202324.csv"))
 names(cap) <- tolower(gsub("X...", "", names(cap), fixed = T))
 
 # change names
 names(cap)[names(cap) == "school_urn"] <- "urn"
+names(cap)[names(cap) == "school_laestab"] <- "laestab"
 
 # subset data to only include relevant schools
 cap <- cap %>% filter(time_period != 200910)
 
 # remove columns
-cap <- cap[, grepl("time_period|urn|pupils_on_roll", names(cap))]
+cap <- cap[, grepl("time_period|urn|laestab|pupils_on_roll", names(cap))]
 
 # Figures are suppressed (“supp”) where they concern fewer than 10 pupils.
 print(apply(cap, 2, function(x) { unique(regmatches(x, gregexpr("[A-Za-z]+", x)))   }))
@@ -51,43 +51,92 @@ cap <- apply(cap, 2, function(x) {ifelse(x == "z" | x == "x", NA, as.numeric(x))
   as.data.frame()
 
 # rename
-names(cap)[c(-1, -2)] <- c("npuptot__cap")
+names(cap)[names(cap) == "pupils_on_roll"] <- c("npuptot__cap")
 # "npuptot__cap" = Number of pupils on roll
 
-# check for duplicate entries
-tmp <- cap %>% group_by(time_period, urn) %>% summarise(obs = n())
 
-# Group the data by the 'urn' column
-cap <- cap %>%
-  group_by(time_period, urn) %>%
-  # Use mutate to update columns within each group
+# read in establishment data
+est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
+est <- as.data.frame(fread(file.path(dir_data, "data_establishments_download.csv"), encoding = "UTF-8"))
+est <- est[!is.na(est$laestab), ]
+
+# select relevant laestab and urn only and relevant columns
+est <- est[!duplicated(est), c("laestab", "urn", "establishmentname")]
+names(est) <- c("laestab", "urn_est", "school")
+
+# extract all id pairings
+ids <- cap %>% 
+  # select columns
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
   mutate(
-    # Set npuptot__cap to NA if the group has more than one row
-    npuptot__cap = ifelse(n() > 1, NA, npuptot__cap)
+    urn_match = urn %in% est$urn_est
   ) %>%
-  # Remove the grouping structure after the operation
+  # sort data
+  arrange(urn) %>%
+  # rename
+  rename(urn_cap = urn,
+         laestab_cap = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_cap[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_cap == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_cap, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_cap, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in cap
+cap <- cap %>% 
+  # # rename original id columns
+  rename(urn_cap = urn, laestab_cap = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  # remove schools with more than one entry per year
+  group_by(time_period, urn) %>%
+  mutate(n = n()) %>%
   ungroup() %>%
-  # Remove rows with any NA values
-  filter(complete.cases(.))
-  
+  filter(n == 1) %>%
+  select(-n) %>%
+  as.data.frame()
+
+gc()
 
 #### read in previously created files ####
 
 spc <- data.table::fread(file.path(dir_data, "data_spc.csv")) # census data collected in January of academic year - Spring census
+# names(spc)[names(spc) == "urn"] <- "urn_spc"
 sen <- data.table::fread(file.path(dir_data, "data_sen.csv"))
 spt <- data.table::fread(file.path(dir_data, "data_spt_census.csv")) 
 ks4 <- data.table::fread(file.path(dir_data, "data_spt_ks4.csv")) 
 
 # add ks2 average percentile and z score data to spt
-
+# match by URN because they stem from the same overall collection
 spt <- merge(spt, ks4[, .(time_period, urn, ks2a_perc, ks2a_zscore)], by = c("time_period", "urn"), all.x = T)
 rm(ks4)
-
-# fix postcode
-spc[, school_postcode := gsub("%20", " ", school_postcode)]
+# names(spt)[names(spt) == "urn"] <- "urn_spt"
 
 # combine data.tables
-df <- merge(spc, sen[, .(time_period, urn, npuptot__sen, npupsen)], by = id_cols, all.x = T)
+df <- merge(spc, sen[, .(time_period, laestab, urn, school, npuptot__sen, npupsen)], by = id_cols, all.x = T) # merge by laestab
 df <- merge(df, spt, by = id_cols, all.x = T)
 df <- merge(df, cap, by = id_cols, all.x = T)
 
@@ -95,12 +144,14 @@ df <- as.data.frame(df)
 
 rm(cap, spc, sen, spt)
 
+copy = df
+
 #### process combined data ####
 
 # get total number of pupils #
 
 # possible variables to use
-tmp <- df[, c(id_cols, "npuptot__spc", "npuptot__sen", "npuptot__cap", "npuptot__sptcensus")]
+tmp <- df[, c("time_period", "laestab", "npuptot__spc", "npuptot__sen", "npuptot__cap", "npuptot__sptcensus")]
 
 # rounding applied to nearest 5 in total pupil headcount data collected in 201011 / 201112 / 201213 in SPC
 # there is a difference between npuptot__spc & npuptot__sen only in the years 2013/14 - 2016/17
@@ -125,13 +176,6 @@ df <- merge(df, tmp[, c(id_cols, col_tot)], by = id_cols, all.x = T)
 
 # select columns
 tmp <- df[, c(id_cols, 
-              
-              "estab", "laestab", 
-              "school", "school_postcode", "region", "region_code", "urban_rural",
-              "old_la_code", "la",
-              "phase_of_education", "school_type", "phase_type_grouping", "type_of_establishment",         
-              "sex_of_school_description", "denomination", "admissions_policy", "idaci_decile",
-              
               col_tot, "npuptot__sen", "npuptot__cap", "npuptot__sptcensus")]
 
 # check NAs
@@ -141,12 +185,12 @@ apply(tmp, 2, FUN = function(x){sum(is.na(x))})
 tmp[, col_tot] <- ifelse(is.na(tmp[, col_tot]), tmp$npuptot__cap, tmp[, col_tot])
 apply(tmp, 2, FUN = function(x){sum(is.na(x))})
 
+# for those that have NAs in npuptot, fill with information included in SEN data
+tmp[, col_tot] <- ifelse(is.na(tmp[, col_tot]), tmp$npuptot__sen, tmp[, col_tot])
+apply(tmp, 2, FUN = function(x){sum(is.na(x))})
+
+
 out <- tmp[, c(id_cols,               
-               "estab", "laestab", 
-               "school", "school_postcode", "region", "region_code", "urban_rural",
-               "old_la_code", "la",
-               "phase_of_education", "school_type", "phase_type_grouping", "type_of_establishment",           
-               "sex_of_school_description", "denomination", "admissions_policy", "idaci_decile",
                col_tot)]
 # out <- out[!duplicated(out),]
 gc()
@@ -181,18 +225,21 @@ out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
 # out <- out[!duplicated(out),]
 
-# FSM calculation in Performance Tables
+# FSM ever (taken from Performance Tables census) but data from school census used to compute percentage
+col_n <- "numfsmever"
+col_p <- "pnpupfsm_ever"
 
-col_n <- "npupfsm_e"
-col_p <- "pnpupfsm_e"
-
+out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
+
+
+# FSM calculation in Performance Tables
 
 # npup_calcspt - Number of pupils (used for FSM calculation in Performance Tables)
 # npupfsm_e_spt - number of pupils known to be eligible for free school meals (School Performance Tables)
 
-col_n <- "npupfsm_e_spt"
 col_tot <- "npup_calcspt"
+col_n <- "npupfsm_e_spt"
 
 out <- merge(out, df[, c(id_cols, col_tot, col_n)], by = id_cols, all = T)
 
@@ -201,20 +248,15 @@ col_p <- "pnpupfsm_e_spt"
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
 
 # FSM ever (taken from Performance Tables)
-col_n <- "npupfsm_ever_spt"
+col_n <- "numfsmever"
 col_p <- "pnpupfsm_ever_spt"
-
-out[, col_n] <- df[, "numfsmever"]
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
 
-# FSM ever (taken from Performance Tables) but data from school census used to compute percentage
-col_p <- "pnpupfsm_ever"
-col_tot <- "npuptot"
-out[, col_p] <- out[, col_n] / out[, col_tot] * 100
 
 # % of pupils whose first language is known or believed to be other than English
 col_n <- "npupeal"
 col_p <- "pnpupeal"
+col_tot <- "npuptot"
 
 out <- merge(out, df[, c(id_cols, col_n)], by = id_cols, all = T)
 out[, col_p] <- out[, col_n] / out[, col_tot] * 100
@@ -282,7 +324,7 @@ data <- out[]
 apply(data, 2, FUN = function(x){sum(is.na(x))})
 
 # save file
-data <- data[with(data, order(urn, time_period)),]
+data <- data[with(data, order(laestab, time_period)),]
 data.table::fwrite(data, file = file.path(dir_data, "data_pupils.csv"), row.names = F)
 
 # # code to debug!

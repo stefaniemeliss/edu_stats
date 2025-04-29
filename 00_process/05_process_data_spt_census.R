@@ -8,7 +8,6 @@ rm(list = ls())
 gc()
 
 # load libraries
-library(kableExtra)
 library(dplyr)
 
 devtools::source_url("https://github.com/stefaniemeliss/edu_stats/blob/main/functions.R?raw=TRUE")
@@ -95,17 +94,6 @@ write.csv(meta, file = file.path(dir_misc, "meta_spt_census.csv"), row.names = F
 
 # ------ process census data ------ #
 
-# add laestab
-census <- census %>%
-  mutate(
-    # replace NA in LAESTAB where possible
-    laestab = ifelse(is.na(laestab) & !is.na(la) & !is.na(estab), 
-                     as.numeric(paste0(la, estab)), 
-                     laestab)
-  ) %>%
-  relocate(time_period) %>%
-  as.data.frame()
-
 ### add data from FOI 2025-0008906 request ###
 
 # read in file
@@ -119,38 +107,97 @@ foi$time_period <- 201920
 # select columns
 foi <- foi[, c(id_cols, "numfsmever")]
 
-
-# get laestab number for each school #
-
-# read in data
-est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
-
-# select revevant rows and columns
-est <- est[est$urn %in% foi$urn, c("urn", "laestab")]
-
-# merge 
-foi <- merge(est, foi, by = "urn")
-
 # add to census data
 census <- rbind.all.columns(census, foi)
 
 # remove duplicate entries from census
 census <- census[!duplicated(census), ]
 
-# create scaffold to safe data
-urn_list <- unique(census$urn)
-sum(is.na(urn_list))
-laestab_list <- unique(census$laestab)
-sum(is.na(laestab_list))
+### Clean information on school identifiers ###
 
-scaffold <- merge(data.frame(time_period = as.numeric(years_list)),
-                  data.frame(laestab = as.numeric(laestab_list)))
-id_cols <- names(scaffold)
+# read in establishment data
+est <- read.csv(file = file.path(dir_data, "data_establishments_search.csv"), na.strings = "")
+est <- as.data.frame(fread(file.path(dir_data, "data_establishments_download.csv"), encoding = "UTF-8"))
+est <- est[!is.na(est$laestab), ]
 
-# add correct urn mapping to scaffold
-urn <- read.csv(file = file.path(dir_misc, "data_spc_urn.csv"))
-urn <- urn[urn$urn %in% urn_list, ]
-scaffold <- merge(scaffold, urn, by = id_cols, all.x = T)
+# select relevant laestab and urn only and relevant columns
+est <- est[!duplicated(est), c("laestab", "urn", "establishmentname")]
+names(est) <- c("laestab", "urn_est", "school")
+
+# extract all id pairings
+ids <- census %>% 
+  # replace NA in LAESTAB where possible
+  mutate(
+    laestab = ifelse(is.na(laestab) & !is.na(la) & !is.na(estab),
+                     as.numeric(paste0(la, estab)),
+                     laestab)
+  ) %>%
+  # select columns
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
+  mutate(
+    urn_match = urn %in% est$urn_est
+    ) %>%
+  # sort data
+  arrange(urn) %>%
+  # rename
+  rename(urn_spt = urn,
+         laestab_spt = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_spt[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_spt == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_spt, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_spt, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in census
+census <- census %>% 
+  # replace NA in LAESTAB where possible
+  mutate(
+    laestab = ifelse(is.na(laestab) & !is.na(la) & !is.na(estab),
+                     as.numeric(paste0(la, estab)),
+                     laestab)
+  ) %>%
+  # remove columns that are uninformative
+  select(where(~length(unique(na.omit(.x))) > 1)) %>% 
+  # rename original id columns
+  rename(urn_spt = urn, laestab_spt = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  as.data.frame()
+
+### Merge timelines across columns ###
+
+# select subset of columns
+df <- census %>% 
+  # select columns
+  select(time_period,
+         urn,
+         laestab, 
+         school) %>%
+  as.data.frame()
+apply(df, 2, function(x){sum(is.na(x))})  
 
 # Total number of pupils on roll (all ages)
 # TOTPUPSENDN - Total number of pupils on roll (all ages) - 2011-11 to 2013/14
@@ -162,7 +209,7 @@ df <- merge_timelines_across_columns(data_in = census,
                                      identifier_columns = id_cols, 
                                      column_vector = cols_to_merge,
                                      stem = new_col,
-                                     data_out = scaffold)
+                                     data_out = df)
 
 # select other columns
 df <- merge(df, census[, c(id_cols,
@@ -185,5 +232,5 @@ df <- merge(df, census[, c(id_cols,
 df <- df[!duplicated(df), ]
 
 # save data
-df <- df[with(df, order(urn, time_period)),]
+df <- df[with(df, order(laestab, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_spt_census.csv"), row.names = F)

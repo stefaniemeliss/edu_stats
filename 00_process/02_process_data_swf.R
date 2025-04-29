@@ -26,6 +26,15 @@ id_cols <- c("time_period", "urn")
 id_cols <- c("time_period", "urn", "laestab")
 id_cols <- c("time_period", "laestab")
 
+# read in establishment data
+est <- as.data.frame(fread(file.path(dir_data, "data_establishments_search.csv"), encoding = "UTF-8"))
+est <- as.data.frame(fread(file.path(dir_data, "data_establishments_download.csv"), encoding = "UTF-8"))
+est <- est[!is.na(est$laestab), ]
+
+# select relevant laestab and urn only and relevant columns
+est <- est[!duplicated(est), c("laestab", "urn", "establishmentname")]
+names(est) <- c("laestab", "urn_est", "school")
+
 get_urns <- F
 
 # Pupil to teacher ratios - school level #
@@ -36,7 +45,7 @@ ptr <- read.csv(file.path(dir_in, "2023", "data", "workforce_ptrs_2010_2023_sch.
 ptr <- ptr %>%
   # rename columns 
   rename_with(., ~tolower(gsub("X...", "", ., fixed = T))) %>% 
-  rename(urn_ptr = school_urn, laestab = school_laestab) %>%
+  rename(urn = school_urn, laestab = school_laestab) %>%
   rename_with(., ~gsub("_name", "", .)) %>%
   # remove columns that are uninformative
   select(where(~length(unique(na.omit(.x))) > 1)) %>%
@@ -44,15 +53,72 @@ ptr <- ptr %>%
 
 # select columns
 ptr <- ptr[, grepl("time_period|urn|laestab|fte|ratio|school|la|region|type", names(ptr))]
-ptr <- ptr[, grepl("time_period|urn|laestab|fte|ratio|school", names(ptr))]
+ptr <- ptr[, grepl("time_period|urn|laestab|fte|ratio", names(ptr))]
 ptr <- ptr[, !grepl("code|number", names(ptr))]
+
+
+# extract all id pairings
+ids <- ptr %>% 
+  # select columns
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
+  mutate(
+    urn_match = urn %in% est$urn_est
+  ) %>%
+  # sort data
+  arrange(urn) %>%
+  # rename
+  rename(urn_ptr = urn,
+         laestab_ptr = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_ptr[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_ptr == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_ptr, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_ptr, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in cap
+ptr <- ptr %>% 
+  # # rename original id columns
+  rename(urn_ptr = urn, laestab_ptr = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  # remove schools with more than one entry per year
+  group_by(time_period, urn) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  filter(n == 1) %>%
+  select(-n) %>%
+  as.data.frame()
+
 
 # Teacher absences - school level #
 
 # read in data
 abs <- read.csv(file.path(dir_in, "2023", "data", "sickness_absence_teachers_sch.csv"))
 names(abs) <- tolower(gsub("X...", "", names(abs), fixed = T))
-names(abs)[names(abs) == "school_urn"] <- "urn_abs"
+names(abs)[names(abs) == "school_urn"] <- "urn"
 names(abs)[names(abs) == "school_laestab"] <- "laestab"
 
 # select columns
@@ -61,12 +127,68 @@ abs <- abs[, grepl("time_period|urn|laestab|abs|day", names(abs))]
 # remove duplicated rows
 abs <- abs[!duplicated(abs), ]
 
+# extract all id pairings
+ids <- abs %>% 
+  # select columns
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
+  mutate(
+    urn_match = urn %in% est$urn_est
+  ) %>%
+  # sort data
+  arrange(urn) %>%
+  # rename
+  rename(urn_abs = urn,
+         laestab_abs = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_abs[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_abs == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_abs, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_abs, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in abs
+abs <- abs %>% 
+  # # rename original id columns
+  rename(urn_abs = urn, laestab_abs = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  # remove schools with more than one entry per year
+  group_by(time_period, urn) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  filter(n == 1) %>%
+  select(-n) %>%
+  as.data.frame()
+
+
 # Teacher pay - school level #
 
 # read in data
 pay <- read.csv(file.path(dir_in, "2023", "data", "workforce_teacher_pay_2010_2023_school.csv"))
 names(pay) <- tolower(gsub("X...", "", names(pay), fixed = T))
-names(pay)[names(pay) == "school_urn"] <- "urn_pay"
+names(pay)[names(pay) == "school_urn"] <- "urn"
 names(pay)[names(pay) == "school_laestab"] <- "laestab"
 
 # select columns
@@ -75,28 +197,197 @@ pay <- pay[, grepl("time_period|urn|laestab|mean|headcount|pay", names(pay))]
 # remove duplicated rows
 pay <- pay[!duplicated(pay), ]
 
+# extract all id pairings
+ids <- pay %>% 
+  # select columns
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
+  mutate(
+    urn_match = urn %in% est$urn_est
+  ) %>%
+  # sort data
+  arrange(urn) %>%
+  # rename
+  rename(urn_pay = urn,
+         laestab_pay = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_pay[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_pay == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_pay, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_pay, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in pay
+pay <- pay %>% 
+  # # rename original id columns
+  rename(urn_pay = urn, laestab_pay = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  # remove schools with more than one entry per year
+  group_by(time_period, urn) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  filter(n == 1) %>%
+  select(-n) %>%
+  as.data.frame()
+
+
 # Teacher vacancies - school level #
 
 # read in data
 vac <- read.csv(file.path(dir_in, "2023", "data", "vacancies_number_rate_sch_2010_2023.csv"))
 names(vac) <- tolower(gsub("X...", "", names(vac), fixed = T))
-names(vac)[names(vac) == "school_urn"] <- "urn_vac"
+names(vac)[names(vac) == "school_urn"] <- "urn"
 names(vac)[names(vac) == "school_laestab"] <- "laestab"
 
 # select columns
 vac <- vac[, grepl("time_period|urn|laestab|vac|rate|tmp", names(vac))]
+
+# extract all id pairings
+ids <- vac %>% 
+  # select columns
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
+  mutate(
+    urn_match = urn %in% est$urn_est
+  ) %>%
+  # sort data
+  arrange(urn) %>%
+  # rename
+  rename(urn_vac = urn,
+         laestab_vac = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_vac[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_vac == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_vac, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_vac, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in vac
+vac <- vac %>% 
+  # # rename original id columns
+  rename(urn_vac = urn, laestab_vac = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  # remove schools with more than one entry per year
+  group_by(time_period, urn) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  filter(n == 1) %>%
+  select(-n) %>%
+  as.data.frame()
+
+
 
 # Size of the school workforce - school level #
 
 # read in data
 swf <- read.csv(file.path(dir_in, "2023", "data", "workforce_2010_2023_fte_hc_nat_reg_la_sch.csv"))
 names(swf) <- tolower(gsub("X...", "", names(swf), fixed = T))
-names(swf)[names(swf) == "school_urn"] <- "urn_swf"
+names(swf)[names(swf) == "school_urn"] <- "urn"
 names(swf)[names(swf) == "school_laestab"] <- "laestab"
 
 # select columns
 swf <- swf[, grepl("time_period|urn|laestab|teach|business|admin", names(swf))]
 swf <- swf[, !grepl("fte_ft|fte_pt|hc_pt|hc_ft|leader|head", names(swf))]
+
+# extract all id pairings
+ids <- swf %>% 
+  # select columns
+  select(urn, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
+  mutate(
+    urn_match = urn %in% est$urn_est
+  ) %>%
+  # sort data
+  arrange(urn) %>%
+  # rename
+  rename(urn_swf = urn,
+         laestab_swf = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_swf[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_swf == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_swf, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_swf, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in swf
+swf <- swf %>% 
+  # # rename original id columns
+  rename(urn_swf = urn, laestab_swf = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  # remove schools with more than one entry per year
+  group_by(time_period, urn) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  filter(n == 1) %>%
+  select(-n) %>%
+  as.data.frame()
+
 
 # Workforce teacher characteristics - school level #
 
@@ -395,7 +686,60 @@ wtc[wtc$tmp_rd != 0,] %>%
   stat_bin(geom = 'text', aes(label = after_stat(count)), binwidth = 1, boundary = 1, vjust = -.5)
 wtc$tmp <- NULL
 wtc$tmp_rd <- NULL
-                                   
+
+# extract all id pairings
+ids <- wtc %>% 
+  # select columns
+  select(urn_wtc, laestab) %>%
+  # remove duplicated rows
+  filter(!duplicated(.)) %>%
+  # identify problematic parings
+  mutate(
+    urn_match = urn_wtc %in% est$urn_est
+  ) %>%
+  # sort data
+  arrange(urn_wtc) %>%
+  # rename
+  rename(laestab_wtc = laestab) %>%
+  as.data.frame()
+
+# create id lookup table for each urn #
+id_lookup <- ids %>%
+  # FIX URNs #
+  left_join(., # add correct urn numbers for urns without a match
+            # mapping between urn and laestab for all incorrect urns
+            est[est$laestab %in% ids$laestab_wtc[ids$urn_match == F], c("laestab", "urn_est")],
+            join_by(laestab_wtc == laestab)
+  ) %>% 
+  mutate(
+    # combine both urn variables into one with the correct URN numbers
+    urn = ifelse(urn_match, urn_wtc, urn_est)
+  ) %>%
+  # FIX LAESTABS #
+  left_join(., # get the correct laestab for each urn
+            est, join_by(urn == urn_est)) %>%
+  # select columns
+  select(urn, urn_wtc, laestab, school) %>%
+  # remove duplicates
+  filter(!duplicated(.)) %>%
+  as.data.frame()
+
+
+# fix id information in wtc
+wtc <- wtc %>% 
+  # # rename original id columns
+  rename(laestab_wtc = laestab) %>%
+  # add correct ids
+  full_join(id_lookup, .) %>%
+  # sort data
+  arrange(laestab, time_period) %>%
+  # remove schools with more than one entry per year
+  group_by(time_period, urn) %>%
+  mutate(n = n()) %>%
+  ungroup() %>%
+  filter(n == 1) %>%
+  select(-n) %>%
+  as.data.frame()
 
 # GET URN NUMBERS #
 if (get_urns) {
@@ -456,31 +800,21 @@ if (get_urns) {
 } else {
   
   # read in urn data
-  urn <- read.csv(file = file.path(dir_misc, "data_swf_urn.csv"))
+  #urn <- read.csv(file = file.path(dir_misc, "data_swf_urn.csv"))
 }
 
 # COMBINE ALL DFs #
 
-# get school identifiers from all dfs
-urn_list <- unique(urn$urn)
-laestab_list <- unique(urn$laestab)
-
-# create scaffold to safe data
-scaffold <- merge(data.frame(time_period = as.integer(years_list)),
-                  # data.frame(urn = urn_list))
-                  data.frame(laestab = laestab_list))
+id_cols <- c("time_period", "urn", "laestab", "school")
 
 # process data
-df <- scaffold %>%
-  # merge with urn info
-  full_join(., urn, by = id_cols) %>%
+df <- swf %>%
+  full_join(., wtc, by = id_cols) %>%
   # merge all dfs
-  left_join(., ptr, by = id_cols) %>%
-  left_join(., pay, by = id_cols) %>% 
-  left_join(., abs, by = id_cols) %>%
-  left_join(., vac, by = id_cols) %>%
-  left_join(., swf, by = id_cols) %>%
-  left_join(., wtc, by = id_cols) %>%
+  full_join(., ptr, by = id_cols) %>%
+  full_join(., pay, by = id_cols) %>% 
+  full_join(., vac, by = id_cols) %>%
+  full_join(., abs, by = id_cols) %>%
   # replace with NAs
   mutate(
     # replace spaces and %
@@ -494,30 +828,14 @@ df <- scaffold %>%
     # u = low reliability - values of the potentially low quality, for example where values of statistical significance have been calculated.
     across(where(is.character), ~na_if(., "u")), 
     # replace comma and make numeric
-    across(pupils_fte:last_col(), \(x) as.numeric(gsub(",", "", x)))) %>%
-  # make colnames lower case
-  rename_with(., tolower) %>%
-  # group by schools
-  # group_by(urn) %>%
-  group_by(laestab) %>%
-  mutate(
-    # fill missing values: observations to be carried backward
-    # across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
-    across(c(school, school_type),
-           ~zoo::na.locf(., na.rm = FALSE, fromLast = TRUE)),
-    # fill missing values: observations to be carried forward
-    # across(c(region_code, region, old_la_code, new_la_code, la, laestab, school, school_type),
-    across(c(school, school_type),
-           ~zoo::na.locf(., na.rm = FALSE, fromLast = FALSE)))  %>%
-  ungroup() %>%
+    across(fte_all_teachers:last_col(), \(x) as.numeric(gsub(",", "", x)))) %>%
   # re-compute ratios
   mutate(pupil_to_qual_teacher_ratio = pupils_fte / qualified_teachers_fte ,
          pupil_to_qual_unqual_teacher_ratio = pupils_fte / teachers_fte,
          pupil_to_adult_ratio = pupils_fte / adults_fte) %>%
   # sort data
-  # arrange(urn, time_period) %>% as.data.frame()
   arrange(laestab, time_period) %>% as.data.frame()
 
+
 # save data
-#df <- df[with(df, order(urn, time_period)),]
 data.table::fwrite(df, file = file.path(dir_data, "data_swf.csv"), row.names = F)
