@@ -299,7 +299,7 @@ fields$establishmentname <- iconv(fields$establishmentname, from = "latin1", to 
 
 # select cols
 dt <- fields[, .SD, .SDcols = 
-               grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor", names(fields))]
+               grepl("urn|la_code|establishmentn|statut|boarders|nurs|sixth|gender|relig|dioc|admiss|trust|urban|country|street|town|postcode|open|close|typeofe|uprn|phase|status|gor|parlia|district|ward|la_name", names(fields))]
 
 # # Subset data
 # dt <- dt[la_code != 0 & # no data from schools that are not affiliated with a LA
@@ -351,7 +351,7 @@ pattern <- paste(christian_patterns, collapse = "|")
 dt[, religiouscharacter_christian := grepl(pattern, religiouscharacter_name, ignore.case = TRUE)]
 
 out <- dt[, .(laestab, urn, la_code, establishmentnumber, establishmentname,
-              street, postcode, town, gor_name,
+              street, postcode, town, gor_name, la_name, districtadministrative_name, administrativeward_name, parliamentaryconstituency_name, #lat, long,
               typeofestablishment_code, typeofestablishment_name, 
               establishmentstatus_name, opendate, reasonestablishmentopened_code, reasonestablishmentopened_name,
               closedate, reasonestablishmentclosed_code, reasonestablishmentclosed_name,
