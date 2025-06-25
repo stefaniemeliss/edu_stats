@@ -59,9 +59,12 @@ if (!dir.exists(dir_out)) {
 # determine years of interest
 start <- 2010
 finish <- 2023
+# start <- 2018
+# finish <- 2018
 
 # Create an empty vector to store failed URLs
 failed_urls <- character()
+
 
 for (year in start:finish) {
   
@@ -135,7 +138,78 @@ for (year in start:finish) {
       # move
       file.rename(tmp_files, tmp_files_new)
     }
+    
   }
+  
+  # get guidance data #
+  if (year %in% c(2015, 2016, 2017, 2018)) {
+    
+    # specify URL
+    url_guid <- paste0("https://www.compare-school-performance.service.gov.uk/download-data?download=true&regions=GUIDANCE&filters=meta&fileformat=zip&year=", academic_year,"&meta=true")
+    
+    # Try downloading data URL
+    tryCatch({
+      download_data_from_url(url = url_guid)
+    }, error = function(e) {
+      cat("Failed to download URL:", url_guid, "\nError message:", e$message, "\n")
+      failed_urls <<- c(failed_urls, url_guid)
+    })
+    
+    if(year == 2017){
+      
+      source_folder <- file.path(dir_out, paste0(academic_year, "_guidance_meta")) 
+      
+      # Copy the folder and its contents to the new location
+      if (file.copy(source_folder, file.path(dir_out, academic_year), recursive = TRUE)) {
+        cat("Folder successfully copied.\n")
+        
+        # Delete the original folder
+        if (unlink(source_folder, recursive = TRUE)) {
+          cat("Original folder successfully deleted.\n")
+        } else {
+          cat("Failed to delete the original folder.\n")
+        }
+      }
+    } else if(year == 2018){
+      
+      source_folder <- file.path(dir_out, "2019 KS4 Guidance")
+      # Copy the folder and its contents to the new location
+      if (file.copy(source_folder, file.path(dir_out, academic_year), recursive = TRUE)) {
+        cat("Folder successfully copied.\n")
+        
+        # Delete the original folder
+        if (unlink(source_folder, recursive = TRUE)) {
+          cat("Original folder successfully deleted.\n")
+        } else {
+          cat("Failed to delete the original folder.\n")
+        }
+      }
+      source_folder <- file.path(dir_out, "2019 16-18 Guidance")
+      # Copy the folder and its contents to the new location
+      if (file.copy(source_folder, file.path(dir_out, academic_year), recursive = TRUE)) {
+        cat("Folder successfully copied.\n")
+        
+        # Delete the original folder
+        if (unlink(source_folder, recursive = TRUE)) {
+          cat("Original folder successfully deleted.\n")
+        } else {
+          cat("Failed to delete the original folder.\n")
+        }
+      }
+    } else {
+      # move guidance data in separate folder, currently saved in dir_out
+      tmp_dir <- file.path(dir_out, academic_year, "guidance_meta")
+      dir.create(tmp_dir)
+      # get all files
+      tmp_files <- list.files(dir_out, pattern = ".pdf|.xls|.ods|.doc", full.names = T)
+      # determine new names
+      tmp_files_new <- gsub("performance-tables", paste0("performance-tables/", academic_year, "/guidance_meta"), tmp_files)
+      # move
+      file.rename(tmp_files, tmp_files_new)
+    }
+
+  }
+  
   # remove variable from environment
   rm(dir_year)
 }
