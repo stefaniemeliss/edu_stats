@@ -66,6 +66,12 @@ for (year in start:finish) {
   
 }
 
+## VARIABLES ##
+
+# PERCTOT	- Percentage of overall absence	PCT	Percentage of overall absence (authorised and unauthorised) for the full 2018/19 academic year.
+# PPERSABS10 - Percentage of enrolments who are persistent absentees	PCT	Percentage of enrolments who are persistent absentees - missing 10% or more of possible sessions across the full 2018/19 academic year.
+
+
 # create scaffold to safe data
 urn_list <- unique(df$urn)
 sum(is.na(urn_list))
